@@ -37,7 +37,7 @@ Transcripts, audio and clipboard contents are user content. Log them only with `
 
 `CONTRIBUTING.md` lists the main `make` targets and the setup. The `Makefile` has the rest.
 
-- Run `make check` before opening a pull request. It runs the lint checks, the tests and the build. CI runs `make check` on every pull request and on every push to `main`.
+- Run `make check` before opening a pull request. It runs the lint checks, the tests and the build. CI runs `make check` on every pull request.
 - `make run` builds and opens the Debug app.
 - Run `make smoke-idle` after scene or menu changes. It fails when the idle Debug app keeps the CPU busy, which is how a SwiftUI update loop shows up.
 - Read app logs with `scripts/show-logs.sh <category>`.

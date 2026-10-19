@@ -64,7 +64,7 @@ scripts/setup-signing.sh   # once, so macOS keeps the permissions across rebuild
 make install               # builds a Release app, installs it in /Applications and opens it
 ```
 
-Builds from source have no updater. [CONTRIBUTING.md](CONTRIBUTING.md) lists the main `make` targets and the code rules, and [docs/architecture.md](docs/architecture.md) explains how the code fits together. CI runs `make check` on every pull request and every push to `main`.
+Builds from source have no updater. [CONTRIBUTING.md](CONTRIBUTING.md) lists the main `make` targets and the code rules, and [docs/architecture.md](docs/architecture.md) explains how the code fits together. CI runs `make check` on every pull request.
 
 ## Contributing
 
