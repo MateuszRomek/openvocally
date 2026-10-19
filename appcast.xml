@@ -12,7 +12,11 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
             <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <sparkle:releaseNotesLink sparkle:edSignature="yvM9pLDH8VwmtCkkQx0H6GojKwWFAAfFOZP1d32Re359G/9/OrZBYLRmOb/vDpuBPrpRF62T+beqdxUebw/VBg==" sparkle:length="421">https://raw.githubusercontent.com/MateuszRomek/openvocally/main/OpenVocally-1.0.1.md</sparkle:releaseNotesLink>
+            <description sparkle:format="markdown"><![CDATA[
+- A cleaner installer: the DMG opens to a window that shows where to drag the app.
+- Settings > Updates has a Check Now button.
+- The History setting's button now reads "Delete All…".
+]]></description>
             <enclosure url="https://github.com/MateuszRomek/openvocally/releases/download/v1.0.1/OpenVocally-1.0.1.zip" length="11380961" type="application/octet-stream" sparkle:edSignature="74NC3criQBXRXX07mf7/9SQUxU5mkXS+2ESFMJG/gk1+WMpOPArzNhkNsjv0TBzii6UdqOq+K0ZNq94HbsEJAg=="/>
         </item>
         <item>
@@ -22,12 +26,21 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
             <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <sparkle:releaseNotesLink sparkle:edSignature="+bQjF/aYgEQwQ2k4UWr+EXtdHYI8SbBCOJzdsmK5SFI7eVpn/PNUufk36n8cqkGs/3O1Y0YCM9SmiMEe0kD9DA==" sparkle:length="735">https://raw.githubusercontent.com/MateuszRomek/openvocally/main/OpenVocally-1.0.md</sparkle:releaseNotesLink>
+            <description sparkle:format="markdown"><![CDATA[
+The first public release of OpenVocally.
+
+- Hold a shortcut, speak and release: OpenVocally transcribes on your Mac and pastes the text into the app you are using.
+- Local speech models: Parakeet v3, Parakeet Ultra and Whisper Turbo.
+- Transcripts history, stats on Home, and a recording indicator in the notch or as a floating island.
+- Signed with Developer ID and notarized by Apple. Updates install from GitHub, signed with an EdDSA key.
+
+Requires a Mac with Apple Silicon and macOS 15 or newer.
+]]></description>
             <enclosure url="https://github.com/MateuszRomek/openvocally/releases/download/v1.0/OpenVocally-1.0.zip" length="11379070" type="application/octet-stream" sparkle:edSignature="sWJZ6uYO1DNe85YZPy9wKUhTrPzfKC6fSdpShVdkowGfikMUCJDm5TfgpufZsc3vJVuNmRo9Qz0rdj3XkgUYBQ=="/>
         </item>
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: aSj0v7QIu4V/ZfwdskEz3dV2pf/G0Midd5uc/Jgjyq7FUR66nW6P3/Hf3+8e4fmxcu1HiaLg+0nUhRvF0/0SBw==
-length: 2371
+edSignature: Pm57VHnElz377H+EiqMj3KmffnhK1hPfo6YsIcVgh1Ban8JOXp/dhO9xvwLB12r+M18r5bsOCp8er9z6qHZmAg==
+length: 2653
 -->

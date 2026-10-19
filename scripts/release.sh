@@ -289,8 +289,9 @@ mkdir -p "$staging"
 cp "$zip" "$staging/"
 [[ -f "$appcast" ]] && cp "$appcast" "$staging/appcast.xml"
 [[ -n "$notes_file" ]] && cp "$notes_file" "$staging/OpenVocally-$version.${notes_file##*.}"
+# The notes are embedded in the feed, so there is no separate notes file to publish.
 "$sparkle_bin/generate_appcast" ${key_args[@]+"${key_args[@]}"} --download-url-prefix "$download_prefix" \
-  --maximum-versions 0 -o "$staging/appcast.xml" "$staging" >>"$build_log" 2>&1 ||
+  --embed-release-notes --maximum-versions 0 -o "$staging/appcast.xml" "$staging" >>"$build_log" 2>&1 ||
   fail "generate_appcast failed. See $build_log"
 
 signature="$(python3 -I - "$staging/appcast.xml" "$build" <<'PY'
