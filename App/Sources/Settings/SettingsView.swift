@@ -355,6 +355,18 @@ private struct UpdatesRows: View {
   @Bindable var updates: Updates
 
   var body: some View {
+    SettingRow("Software update", subtitle: status) {
+      switch updates.state {
+      case .none:
+        Button("Check Now") { updates.checkForUpdates() }
+          .appButton(size: .small)
+          .disabled(!updates.canCheckForUpdates)
+      case .available:
+        Button("Show Update") { updates.showAvailableUpdate() }.appButton(size: .small)
+      case .readyToInstall:
+        Button("Restart to Update") { updates.installNow() }.appButton(size: .small)
+      }
+    }
     SettingRow("Check for updates automatically") {
       Toggle("Check for updates automatically", isOn: $updates.automaticallyChecks)
         .labelsHidden().switchStyle()
@@ -367,6 +379,14 @@ private struct UpdatesRows: View {
         .labelsHidden().switchStyle()
     }
     .disabled(!updates.automaticallyChecks)
+  }
+
+  private var status: String {
+    switch updates.state {
+    case .none: "OpenVocally checks GitHub for new versions."
+    case .available(let version): "Version \(version) is available."
+    case .readyToInstall(let version): "Version \(version) installs when you restart."
+    }
   }
 }
 
