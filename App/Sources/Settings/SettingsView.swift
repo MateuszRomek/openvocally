@@ -247,7 +247,7 @@ private struct HistoryRows: View {
     }
     .onChange(of: retention) { history.applyRetention() }
     SettingRow("Delete all transcripts", subtitle: "Removes your whole history. This can't be undone.") {
-      Button("Delete All Transcripts…", role: .destructive) {
+      Button("Delete All…", role: .destructive) {
         Task { pendingCount = try? await readyDatabase?.transcriptCount() }
       }
       .appButton(.destructive, size: .small)

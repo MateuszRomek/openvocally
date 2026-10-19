@@ -14,7 +14,7 @@ fi
 cd "$(dirname "$0")/.."
 pattern='(^|[^A-Za-z0-9_-])D-[0-9]{1,3}([^0-9]|$)|(^|[^A-Za-z0-9_&$#{])#[0-9]{1,4}([^0-9A-Za-z]|$)|[Tt]he owner'
 hits="$(git ls-files --cached --others --exclude-standard -- App OpenVocallyKit scripts Makefile project.yml .github docs README.md AGENTS.md CONTRIBUTING.md SECURITY.md |
-  grep -vE '\.(wav|png|jpg|svg|mp3|json|resolved)$|^scripts/check-references\.sh$' |
+  grep -vE '\.(wav|png|jpg|tiff|svg|mp3|json|resolved)$|^scripts/check-references\.sh$' |
   while IFS= read -r file; do [[ -f "$file" ]] && printf '%s\n' "$file"; done |
   xargs grep -nE "$pattern" || true)"
 if [[ -n "$hits" ]]; then

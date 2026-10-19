@@ -268,13 +268,10 @@ ditto -c -k --keepParent "$app" "$zip"
 
 # The DMG holds the stapled app and an Applications link, so users install by dragging.
 log "Building $(basename "$dmg")..."
-dmg_root="$out_dir/dmg"
-mkdir -p "$dmg_root"
-ditto "$app" "$dmg_root/OpenVocally.app"
-ln -s /Applications "$dmg_root/Applications"
-hdiutil create -volname OpenVocally -srcfolder "$dmg_root" -fs APFS -format ULFO -ov "$dmg" >>"$build_log" 2>&1 ||
-  fail "hdiutil could not create the DMG. See $build_log"
-rm -rf "$dmg_root"
+scripts/release/build-dmg.sh "$app" "$dmg" >>"$build_log" 2>&1 || {
+  tail -n 20 "$build_log" >&2
+  fail "scripts/release/build-dmg.sh could not build the DMG. Full log: $build_log"
+}
 sign "$dmg"
 codesign --verify --strict "$dmg" 2>/dev/null || fail "The DMG signature does not verify. Run: codesign --verify --strict -vv '$dmg'"
 if [[ "${SKIP_NOTARIZE:-0}" != 1 ]]; then

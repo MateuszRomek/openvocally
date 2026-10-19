@@ -139,18 +139,24 @@ struct HotkeysRebindTests {
   }
 }
 
+/// A reference the tap's closures can share, so the control they build is free to cross
+/// into `Hotkeys`. A local `Mutex` captured by those closures is not.
+private final class DisableCount: Sendable {
+  let value = Mutex(0)
+}
+
 struct HotkeysStopTests {
   @Test func `stop disables the tap once and ends events`() async {
     let hotkeys = Hotkeys(bindings: .chordFixture)
-    let disables = Mutex(0)
+    let disables = DisableCount()
     hotkeys.attachTap {
-      EventTapControl(isEnabled: { true }, enable: {}, disable: { disables.withLock { $0 += 1 } })
+      EventTapControl(isEnabled: { true }, enable: {}, disable: { disables.value.withLock { $0 += 1 } })
     }
     hotkeys.stop()
     hotkeys.stop()
     var received = 0
     for await _ in hotkeys.events { received += 1 }
     #expect(received == 0)
-    #expect(disables.withLock { $0 } == 1)
+    #expect(disables.value.withLock { $0 } == 1)
   }
 }
