@@ -8,7 +8,6 @@ struct TryItStep: View {
   let download: ModelDownloadStatus
   let retry: () -> Void
   @State private var text = ""
-  @State private var dictated = false
   @FocusState private var focused: Bool
 
   var body: some View {
@@ -22,12 +21,19 @@ struct TryItStep: View {
     .frame(maxWidth: StepHeader.textWidth)
     .motion(.onboardingStep, value: done)
     .onAppear { focused = true }
-    .onChange(of: model.feedback.phase.showsRecording) { _, recording in
-      if recording { dictated = true }
-    }
     .onChange(of: text) { _, value in
-      guard dictated, !done, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+      guard landing, !done, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
       done = true
+    }
+  }
+
+  /// Only an edit while a dictation pastes counts, so typing or a paste of the user's own
+  /// clipboard never celebrates. `.complete` shows for 650 ms after the paste, which covers
+  /// the ⌘V reaching the field after the pipeline reports it.
+  private var landing: Bool {
+    switch model.feedback.phase {
+    case .pasting, .complete: true
+    default: false
     }
   }
 
