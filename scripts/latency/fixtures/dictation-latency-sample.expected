@@ -1,0 +1,16 @@
+mark                         n  median_ms     p95_ms     max_ms
+LB-01                        3      40.00      50.00      50.00
+LB-01-hold                   1     190.00     190.00     190.00
+LB-02                        2     150.00     250.00     250.00
+pressToCaptureRequested      3       3.10       4.20       4.20
+
+LB-02 stages
+stage                        n  median_ms     p95_ms     max_ms
+tail                         2      10.00      20.00      20.00
+resample                     2       1.50       2.00       2.00
+transcribe                   2     100.00     200.00     200.00
+process                      2       1.00       2.00       2.00
+pasteSetup                   2      10.00      12.00      12.00
+keyPost                      2       5.00       6.00       6.00
+other                        2      12.00      18.50      18.50
+audio_ms n=2 median=1500.00 min=1500.00 max=3000.00

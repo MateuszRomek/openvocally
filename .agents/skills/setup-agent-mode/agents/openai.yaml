@@ -1,0 +1,6 @@
+interface:
+  display_name: "Setup Agent Mode"
+  short_description: "Choose and configure models per agent role"
+  default_prompt: "Use $setup-agent-mode to configure model routing for this host."
+policy:
+  allow_implicit_invocation: false

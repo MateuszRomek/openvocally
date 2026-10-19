@@ -1,0 +1,479 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-mode": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/agent-mode/SKILL.md",
+      "computedHash": "de848ffa0d27ed83e2a067b777da8dedac7f51a4ec9224548ce67a7337b13c47"
+    },
+    "animate": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/animate/SKILL.md",
+      "computedHash": "7598d33e7f60dd5c24531eaaa897621cc3bdb48e8050324211627973bc59c4ce"
+    },
+    "animation-vocabulary": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/animation-vocabulary/SKILL.md",
+      "computedHash": "0058036865ecbb864fd0c4132efcc62425355d6e99c7e6ef6a936742d62a5dea"
+    },
+    "apple-design": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/apple-design/SKILL.md",
+      "computedHash": "0190417d092a0df447b000154e39733ea6d97efad6d3bec8a6ce3845aeb88914"
+    },
+    "architect": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/architect/SKILL.md",
+      "computedHash": "4224badb07d1b9b14c39a226dba44ce925e63e357a04f6b40cd2efe694198468"
+    },
+    "arena": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/arena/SKILL.md",
+      "computedHash": "eca75f0fede927d6d4bc54567714ddf3e3d5e43732b6adaa46b91f8a4dee35f5"
+    },
+    "ask-sonner": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ask-sonner/SKILL.md",
+      "computedHash": "8bd257b845985f4b35b603b510a126604176521094af79c4b7347ffeb8a8f7ab"
+    },
+    "automate-me": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/automate-me/SKILL.md",
+      "computedHash": "35d2de111ac56a60224cf77d5cead93ec9ac5e7e2f1c8c070a94655e2414a301"
+    },
+    "benchmark-checklist": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/benchmark-checklist/SKILL.md",
+      "computedHash": "75255aeea79a631e6900bd59717a344bdbbabbd6dba97888a7da9e83f75be0aa"
+    },
+    "blast-radius": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/blast-radius/SKILL.md",
+      "computedHash": "748de95ad5aae5efa666a8ca5656eb38684b4c64be7b58e27827c9038dc4214c"
+    },
+    "break-ui": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/break-ui/SKILL.md",
+      "computedHash": "60ada67662925f4df5e3c6ff41cac3ab241b66f8898100a5ffcd7ba7196cb868"
+    },
+    "bro": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/bro/SKILL.md",
+      "computedHash": "b651827a1c11465d79500780e53414fdccffd12ce3b640138dee2d04133a9a33"
+    },
+    "copy-editing": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/copy-editing/SKILL.md",
+      "computedHash": "ecebb15db7423d2ecf23cb4dfe73ab58e1c30ebece6e9acfde3cd510202ba36b"
+    },
+    "copywriting": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/copywriting/SKILL.md",
+      "computedHash": "62f9f77445cdc6af1db17a116edb05426df18636d204fc9aa51829634361e04f"
+    },
+    "correct": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/correct/SKILL.md",
+      "computedHash": "33fd29b172f7e0bc9e6ae178abffd556f372ac539b826d85a5b2fd7d8cfead5e"
+    },
+    "create-verification-skill": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/create-verification-skill/SKILL.md",
+      "computedHash": "3f624f93a434f2eb6d73ae36a355b5072e7ec021823b071691e23bf6bf10aac0"
+    },
+    "domain-modeling": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/domain-modeling/SKILL.md",
+      "computedHash": "a11713c0ff7870efa3c331b2e273f09116158485246edc89ae5088eefd1b0b48"
+    },
+    "emil-design-eng": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/emil-design-eng/SKILL.md",
+      "computedHash": "51f2537e04d15911b41d78e2de24c36a0e26d41beae15e82a954fe5496a5eda9"
+    },
+    "figure-it-out": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/figure-it-out/SKILL.md",
+      "computedHash": "9e40738df38a8da73411d73116b336d58f6fa2d39fc712941a42ec9cb59d5070"
+    },
+    "find-animation-opportunities": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-animation-opportunities/SKILL.md",
+      "computedHash": "465d087c41768e4f14ed640dd049036009f613feb55baaa5831b68b33178f9d2"
+    },
+    "grill-me": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/grill-me/SKILL.md",
+      "computedHash": "40acb92faa7bb1eabce0c9f290739c27f61e8c4af95954e75aca39be6ea0c7eb"
+    },
+    "grill-with-docs": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/grill-with-docs/SKILL.md",
+      "computedHash": "1bf7bdb665286bb943d4fb97ed063ac2b054f0798d0c9bc2cd8925791ad79f18"
+    },
+    "grilling": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/grilling/SKILL.md",
+      "computedHash": "4dd886b0196bf43729d954ae326016f2bd9f5f79d892500b407c33a753362f14"
+    },
+    "how": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/how/SKILL.md",
+      "computedHash": "b5cb35efc1e165183d3ef7e542d7e9eee727ca6a3f585478faf08da32968dbf0"
+    },
+    "implement-specification": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/implement-specification/SKILL.md",
+      "computedHash": "4f227d7f931d4ea32e1c1639645ac7017b950a9c393687052cb89b61c05523f6"
+    },
+    "improve-animations": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/improve-animations/SKILL.md",
+      "computedHash": "524ea241e41d58bbdd8e288700fe24f5725e2a2f3ae7186ad7cebf9055058356"
+    },
+    "interrogate": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/interrogate/SKILL.md",
+      "computedHash": "b9b73552c177caa5c8b4ca3349b71949d6ed9eb27c02a03e7aa3a43dc21b6a90"
+    },
+    "maintain-verification-skill": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/maintain-verification-skill/SKILL.md",
+      "computedHash": "ab9eb3f4660433b82bada6051c17e06a46033eff323fd05ad3ae5d06f4d5d210"
+    },
+    "merge-when-ci-passes": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/merge-when-ci-passes/SKILL.md",
+      "computedHash": "b012771148e03ce23595373a821312657d0cfb19b5bcba5f12a435292db4ea0f"
+    },
+    "mobile-native": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/mobile-native/SKILL.md",
+      "computedHash": "f221cea36642168df6d3d6d7f236237cbf1ae669138ff7df07775674223d49ad"
+    },
+    "no-comments": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/no-comments/SKILL.md",
+      "computedHash": "bc804ba6ddb4df7905d601961259b525f9dff85e89ae9b14dcccf136316714cb"
+    },
+    "pick-ui-library": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pick-ui-library/SKILL.md",
+      "computedHash": "5d2a77bf0ecafbda85aa95fb49999b6d77945d9066ec83d970b62e5b388cd686"
+    },
+    "prepare-pull-request": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/prepare-pull-request/SKILL.md",
+      "computedHash": "44c414465ff514fac3d9e2486f8165ad622bc4ea4b854839e338d6207fdc7131"
+    },
+    "principle-attack-the-premise": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-attack-the-premise/SKILL.md",
+      "computedHash": "3221a3db4e40420696747af169813e685cfe831cf473f00e205cb78ee576e449"
+    },
+    "principle-boundary-discipline": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-boundary-discipline/SKILL.md",
+      "computedHash": "51f995752ff3bad613526eb7779872e01d01ac141a88c9ca050075a074ee5b70"
+    },
+    "principle-build-the-lever": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-build-the-lever/SKILL.md",
+      "computedHash": "e1f77c1844113e90ed231ef51a6717fb76804723269c23436c65e30c30a42718"
+    },
+    "principle-encode-lessons-in-structure": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-encode-lessons-in-structure/SKILL.md",
+      "computedHash": "13cb9b8bbf0aecd3c03a30803bbdfc012f6123f1a7d44db134bc8cce88a02d63"
+    },
+    "principle-exhaust-the-design-space": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-exhaust-the-design-space/SKILL.md",
+      "computedHash": "bf5f30c97afa75da12e1f982bffc3176d2172bd124072f6d9e74d06b0cf2b965"
+    },
+    "principle-experience-first": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-experience-first/SKILL.md",
+      "computedHash": "bd0254d8a460c145a148214cbc136f84dbba6edc9acc48c00a8af660efc88856"
+    },
+    "principle-explain-the-number": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-explain-the-number/SKILL.md",
+      "computedHash": "7283824fc44383eced971485152b0f86b18173dc221c7195b373b459a7f2aa27"
+    },
+    "principle-fix-root-causes": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-fix-root-causes/SKILL.md",
+      "computedHash": "a6fe6d14109670ba52904a95a18711816b7cf464f2730fa6d34ed5d9f362edb6"
+    },
+    "principle-foundational-thinking": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-foundational-thinking/SKILL.md",
+      "computedHash": "bb6beaf165b3a3a454c20d243e5be96b0a7b2a8bc7b217be3d214a70a3bf3f14"
+    },
+    "principle-guard-the-context-window": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-guard-the-context-window/SKILL.md",
+      "computedHash": "79651832c9b9a87405f02ccba09ee23104b4eca3e87bb31775a30c8ec26f75be"
+    },
+    "principle-laziness-protocol": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-laziness-protocol/SKILL.md",
+      "computedHash": "5c6a19fca468569ee4f31fe71148a1c09e36d4b4c7d3ee30d05ebc7c4e840ea8"
+    },
+    "principle-make-operations-idempotent": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-make-operations-idempotent/SKILL.md",
+      "computedHash": "8293bf10530fdffa13216645432989a14b3ca4a1b6a6f0e12bf9a141ba48f802"
+    },
+    "principle-migrate-callers-then-delete-legacy-apis": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-migrate-callers-then-delete-legacy-apis/SKILL.md",
+      "computedHash": "fc645cc45560cb8e0fd655759a9d11553605942c014910e33a3c2182da276e96"
+    },
+    "principle-minimize-reader-load": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-minimize-reader-load/SKILL.md",
+      "computedHash": "094bf45ca1440596057715d2124c96534917087b730a4ba25c0314eff2447368"
+    },
+    "principle-model-the-domain": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-model-the-domain/SKILL.md",
+      "computedHash": "ecefa086214024c8ea375193657a2464aa0f2c582e327c3f507db6ea35506a56"
+    },
+    "principle-never-block-on-the-human": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-never-block-on-the-human/SKILL.md",
+      "computedHash": "6179d684dfe3506e05a90b3aa450df24bb0057c3e0c624b77f5e89661b4e487e"
+    },
+    "principle-outcome-oriented-execution": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-outcome-oriented-execution/SKILL.md",
+      "computedHash": "8a353f45bd32f61e67702c0bdab668eb94d669afef038a75a4263ce272492169"
+    },
+    "principle-prove-it-works": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-prove-it-works/SKILL.md",
+      "computedHash": "1ed61e8344e183ef344d70e54294b8bd7eba8b874d58cfcfbbbfd6fad75959b8"
+    },
+    "principle-redesign-from-first-principles": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-redesign-from-first-principles/SKILL.md",
+      "computedHash": "149fec5da594ae56df069d2e79a01a2d1e003c49770d79fc683096d559c94213"
+    },
+    "principle-separate-before-serializing-shared-state": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-separate-before-serializing-shared-state/SKILL.md",
+      "computedHash": "d372812c2617e5226df5bd60950dd9d3e8f5758a9a1e4fefc63114ad53253769"
+    },
+    "principle-sequence-verifiable-units": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-sequence-verifiable-units/SKILL.md",
+      "computedHash": "d7994ed88db8b54b3e0dd2d6a00d4e91a79d2e7310d6d519e955609cead5c0c9"
+    },
+    "principle-subtract-before-you-add": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-subtract-before-you-add/SKILL.md",
+      "computedHash": "c85188049e825fe715bb76bb0aa53adfa7f2f719a0b52db2b0c72daf6dd9aac7"
+    },
+    "principle-test-behavior-not-implementation": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-test-behavior-not-implementation/SKILL.md",
+      "computedHash": "41a7140188cc96559c6af4bde7ca3e9611458490846d2dc446776e962ad9f430"
+    },
+    "principle-type-system-discipline": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/principle-type-system-discipline/SKILL.md",
+      "computedHash": "dbd4efbb3e6da61329f23b43301b8aa73fde79d6fca75be3d518f51abfd30e32"
+    },
+    "prototype": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/prototype/SKILL.md",
+      "computedHash": "77be567d8c946608fdd15e61b62ab383cdf289a194dce2479828b7eda860d3ba"
+    },
+    "recall": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/recall/SKILL.md",
+      "computedHash": "94f34b78f4e2926fadec421c197094c978aa076d1fc4d8670b3a7a11e7c02ea1"
+    },
+    "reflect": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/reflect/SKILL.md",
+      "computedHash": "c4117dba89d81e7e1cccc1bf312918a28957ae5fcaa3eb1e41a0d655d5372a53"
+    },
+    "research": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/research/SKILL.md",
+      "computedHash": "c8c1cba327a6f824b554cd978079a3dadd7406d73174f8fb9bfef58824691970"
+    },
+    "resolving-merge-conflicts": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/resolving-merge-conflicts/SKILL.md",
+      "computedHash": "63b2dcadbe9124caeb3448f1378286fe18dcefb2494f60e136831b8b4986ca27"
+    },
+    "review-animations": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/review-animations/SKILL.md",
+      "computedHash": "b4e5f0f4fe3e2743c85bf7354108f48a0b9d502cb20ef5c4a9c195da91f93736"
+    },
+    "setup-agent-mode": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/setup-agent-mode/SKILL.md",
+      "computedHash": "57ff1a7751450b23974f5448aa1418ac5209f23466a8db9c5d60e3193cbe3b98"
+    },
+    "setup-engineering-workspace": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/setup-engineering-workspace/SKILL.md",
+      "computedHash": "12b42cc94149b4f2e548e91a20441c33d135f246966f387790770f837177f207"
+    },
+    "show-me-your-work": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/show-me-your-work/SKILL.md",
+      "computedHash": "065133208d0cddac18b6f42735dfff23f6945c1ca8eee4179fb79fa8d98429b8"
+    },
+    "swarm": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/swarm/SKILL.md",
+      "computedHash": "e053d053880b41c1d852015d777f423eac235e454aa6ab86ded94cdead1f5fa6"
+    },
+    "tdd": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/tdd/SKILL.md",
+      "computedHash": "4fbd1aed4f291525834a307cc97ab6f87ffc36ec2e2ce37e43b28193ec32c25a"
+    },
+    "teach": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/teach/SKILL.md",
+      "computedHash": "6fd3fd6b7c21820e60c206e66b323a4f31b805baf58b3ce81424f0073646a8d6"
+    },
+    "technical-writing": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/technical-writing/SKILL.md",
+      "computedHash": "9a2889a06654f8a2e677dbfbaa6449384f885709650a764e1be3a3dcf21b9901"
+    },
+    "to-spec": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/to-spec/SKILL.md",
+      "computedHash": "2efaca25eb13ed0615634297626cdbb5c23f8c77857046cdced9b4036dc9fd67"
+    },
+    "to-tickets": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/to-tickets/SKILL.md",
+      "computedHash": "c03327286504637cbdfc433e21d95cb8d11452883ecc3b3a4d1dc3e93bd2bb15"
+    },
+    "triage": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/triage/SKILL.md",
+      "computedHash": "332a7b813986e4e29d1faaa4b3c5bda715d9d2252058b34984b68132706cd1aa"
+    },
+    "unslop": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/unslop/SKILL.md",
+      "computedHash": "1dab50409a2dea6417f7a2f40dca644543f7ba1e1c299cd17a6eddc12aa9aa16"
+    },
+    "wayfinder": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/wayfinder/SKILL.md",
+      "computedHash": "f86807965f47ffc14a2267db8348bf0682bf42a1cf6f941b5ed95f1f9fa08cad"
+    },
+    "why": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/why/SKILL.md",
+      "computedHash": "44c3e64c670266abc43c274a0bf78fbbfcdd3ae12056e9cdf712f292bc07238f"
+    },
+    "wizard": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/wizard/SKILL.md",
+      "computedHash": "2c0d1187398b1b7ebb9902a4c91b24181ee07892f285615b46c59f45e2c4229c"
+    },
+    "write-swift": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "skillPath": "skills/write-swift/SKILL.md",
+      "computedHash": "f20bb9cf51dbee1900b264820a12f1d3d378dc4d23ac758e7ba9e644c49a2459"
+    },
+    "writing-for-agents": {
+      "source": "MateuszRomek/skills",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/writing-for-agents/SKILL.md",
+      "computedHash": "eeaaa5071c3aea18e69d5df9feff8807a9b36fe126a0a8b81c648f3595254234"
+    }
+  }
+}

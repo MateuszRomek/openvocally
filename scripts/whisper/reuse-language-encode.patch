@@ -1,0 +1,54 @@
+diff --git a/src/whisper.cpp b/src/whisper.cpp
+index 1675f33..406ce00 100644
+--- a/src/whisper.cpp
++++ b/src/whisper.cpp
+@@ -6989,6 +6989,16 @@ int whisper_full_with_state(
+         }
+     }
+ 
++    // set before the language probe, so the probe encodes with this call's context and the main loop reuses that encoding
++    if (params.audio_ctx > whisper_n_audio_ctx(ctx)) {
++        WHISPER_LOG_ERROR("%s: audio_ctx is larger than the maximum allowed (%d > %d)\n", __func__, params.audio_ctx, whisper_n_audio_ctx(ctx));
++        return -5;
++    }
++    state->exp_n_audio_ctx = params.audio_ctx;
++
++    // the language probe encodes the window at seek 0; the main loop reuses it
++    int encoded_seek = -1;
++
+     // auto-detect language if not specified
+     if (params.language == nullptr || strlen(params.language) == 0 || strcmp(params.language, "auto") == 0 || params.detect_language) {
+         std::vector<float> probs(whisper_lang_max_id() + 1, 0.0f);
+@@ -7005,6 +7015,7 @@ int whisper_full_with_state(
+             WHISPER_LOG_ERROR("%s: failed to auto-detect language\n", __func__);
+             return -3;
+         }
++        encoded_seek = 0;
+         state->lang_id = lang_id;
+         params.language = whisper_lang_str(lang_id);
+ 
+@@ -7138,13 +7149,6 @@ int whisper_full_with_state(
+         }
+     }
+ 
+-    // overwrite audio_ctx, max allowed is hparams.n_audio_ctx
+-    if (params.audio_ctx > whisper_n_audio_ctx(ctx)) {
+-        WHISPER_LOG_ERROR("%s: audio_ctx is larger than the maximum allowed (%d > %d)\n", __func__, params.audio_ctx, whisper_n_audio_ctx(ctx));
+-        return -5;
+-    }
+-    state->exp_n_audio_ctx = params.audio_ctx;
+-
+     // these tokens determine the task that will be performed
+     std::vector<whisper_token> prompt_init = { whisper_token_sot(ctx), };
+ 
+@@ -7212,7 +7216,9 @@ int whisper_full_with_state(
+         }
+ 
+         // encode audio features starting at offset seek
+-        if (!whisper_encode_internal(*ctx, *state, seek, params.n_threads, params.abort_callback, params.abort_callback_user_data)) {
++        const bool reuse_encoding = seek == encoded_seek;
++        encoded_seek = -1;
++        if (!reuse_encoding && !whisper_encode_internal(*ctx, *state, seek, params.n_threads, params.abort_callback, params.abort_callback_user_data)) {
+             WHISPER_LOG_ERROR("%s: failed to encode\n", __func__);
+             return -6;
+         }

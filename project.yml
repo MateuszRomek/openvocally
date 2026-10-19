@@ -1,0 +1,122 @@
+name: OpenVocally
+options:
+  bundleIdPrefix: com.openvocally
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    ARCHS: arm64
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
+    SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: YES
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  OpenVocallyKit:
+    path: OpenVocallyKit
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
+targets:
+  OpenVocally:
+    type: application
+    platform: macOS
+    sources:
+      - App/Sources
+      - App/Resources/AppIcon.icon
+      - App/Resources/Assets.xcassets
+      - path: App/Resources/Sounds
+        buildPhase: resources
+      - path: App/Resources/Credits.html
+        buildPhase: resources
+      - path: App/Resources/Licenses
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: OpenVocallyKit
+        product: DictationCore
+      - package: OpenVocallyKit
+        product: Dictation
+      - package: OpenVocallyKit
+        product: AudioCapture
+      - package: OpenVocallyKit
+        product: Hotkeys
+      - package: OpenVocallyKit
+        product: Transcription
+      - package: OpenVocallyKit
+        product: Models
+      - package: OpenVocallyKit
+        product: Paste
+      - package: OpenVocallyKit
+        product: Overlay
+      - package: OpenVocallyKit
+        product: SoundCues
+      - package: OpenVocallyKit
+        product: Diagnostics
+      - package: OpenVocallyKit
+        product: Storage
+      - package: OpenVocallyKit
+        product: DesignSystem
+      - package: OpenVocallyKit
+        product: Reporting
+      - package: Sparkle
+    info:
+      path: App/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.productivity
+        LSMultipleInstancesProhibited: true
+        SUFeedURL: $(UPDATE_FEED_URL)
+        SUPublicEDKey: $(UPDATE_PUBLIC_KEY)
+        # Sparkle refuses an appcast without a valid EdDSA signature, and requires the second key with the first.
+        SURequireSignedFeed: true
+        SUVerifyUpdateBeforeExtraction: true
+        SUEnableAutomaticChecks: true
+        SUAutomaticallyUpdate: true
+        SUEnableSystemProfiling: false
+        NSMicrophoneUsageDescription: OpenVocally listens while you hold the dictation shortcut and transcribes the audio on this Mac.
+    settings:
+      base:
+        # release.sh overrides APP_BUNDLE_ID for its update test; package targets keep their own IDs.
+        APP_BUNDLE_ID: com.openvocally.app
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        # The name in Finder, the Dock and the privacy lists. The Debug name tells the two builds
+        # apart; PRODUCT_NAME stays put so the .app path the scripts use doesn't change.
+        APP_DISPLAY_NAME: OpenVocally
+        # install.sh sets APP_SIGN_IDENTITY. A command-line CODE_SIGN_IDENTITY would also reach the
+        # package resource bundles, whose automatic signing then demands a development team.
+        APP_SIGN_IDENTITY: "-"
+        CODE_SIGN_IDENTITY: $(APP_SIGN_IDENTITY)
+        CODE_SIGN_STYLE: Manual
+        # install.sh and run-debug.sh switch to OpenVocally.local.entitlements for the self-signed
+        # local identity: it has no Team ID, so dyld rejects Sparkle.framework under library validation.
+        APP_ENTITLEMENTS: App/Resources/OpenVocally.entitlements
+        CODE_SIGN_ENTITLEMENTS: $(APP_ENTITLEMENTS)
+        ENABLE_HARDENED_RUNTIME: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # The release script sets both; an empty feed URL builds the app without an updater.
+        UPDATE_FEED_URL: ""
+        UPDATE_PUBLIC_KEY: ""
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.openvocally.app.debug
+          APP_DISPLAY_NAME: OpenVocally Dev
+          # Unfinished features build only here, behind FEATURE_<NAME> flags appended to this
+          # list, so Release binaries carry no dormant code.
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited)
+schemes:
+  OpenVocally:
+    build:
+      targets:
+        OpenVocally: all
+    test:
+      config: Debug

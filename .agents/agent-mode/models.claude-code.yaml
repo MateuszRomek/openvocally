@@ -1,0 +1,137 @@
+version: 2
+host: claude-code
+intent:
+  optimization: "Balanced quality and cost on Max 5x; Opus 5.5 low only for well-specified implementation, Opus 5.5 medium for review and judgment, Opus 5.5 high for the hardest tasks, Sonnet 5.5 for narrow work and second opinions, Haiku 5.5 for volume reading"
+  budget: "Claude Max 5x usage allowance; capped worker counts, no nested delegation"
+delegation:
+  mode: enabled
+  max-workers-per-task: 6
+  max-concurrent-workers: 3
+  max-delegation-depth: 1
+roles:
+  feature:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: low
+  refactoring:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: low
+  bug-fix:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+  perf-issue:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+  hillclimb:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: low
+  judgment-prose:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+  hardest-tasks:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: high
+  bulk-reader:
+    execution: workers
+    workers:
+      - model: haiku
+        reasoning: medium
+  comment-sicko:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: low
+  reviewer:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+  how-explorer:
+    execution: workers
+    workers:
+      - model: haiku
+        reasoning: medium
+  how-explainer:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: low
+  why-investigators:
+    execution: workers
+    workers:
+      - model: sonnet
+        reasoning: medium
+  why-synthesizer:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+  reflect-tooling:
+    execution: workers
+    workers:
+      - model: sonnet
+        reasoning: medium
+  reflect-judgment:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+  reflect-divergent:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+  reflect-synthesizer:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+  arena-runners:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+      - model: sonnet
+        reasoning: high
+  arena-cross-judge:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+  swarm-worker:
+    execution: workers
+    workers:
+      - model: sonnet
+        reasoning: medium
+  architect-runners:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+      - model: sonnet
+        reasoning: high
+  interrogate-reviewers:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium
+      - model: sonnet
+        reasoning: high
+  researcher:
+    execution: workers
+    workers:
+      - model: opus
+        reasoning: medium

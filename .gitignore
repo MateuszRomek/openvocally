@@ -1,0 +1,10 @@
+OpenVocally.xcodeproj/
+App/Resources/Info.plist
+.build/
+OpenVocallyKit/.build/
+OpenVocallyKit/.swiftpm/
+.DS_Store
+.agents/agent-mode/models.*.local.yaml
+.claude/worktrees/
+.claude/settings.local.json
+OpenVocallyKit/Vendor/

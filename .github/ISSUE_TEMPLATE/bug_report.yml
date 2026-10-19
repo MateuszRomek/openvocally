@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in OpenVocally does not work as expected.
+labels: [needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: Do not paste dictated text, recordings or clipboard contents that you would not publish. To report a security problem, use the private form linked from SECURITY.md instead.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Hold the shortcut in Notes.
+        2. Say a short sentence.
+        3. Release the shortcut.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: Speech model
+      options:
+        - Parakeet v3
+        - Parakeet Ultra
+        - Whisper Turbo
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: OpenVocally version
+      description: Shown in Settings > Support > Version.
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: macOS version and Mac
+      placeholder: macOS 26.1, MacBook Pro M1 Pro
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Optional. Attach the file from Settings > Support > Diagnostics > Export. It holds your settings and recent app logs, without transcripts, audio or device names.
+    validations:
+      required: false

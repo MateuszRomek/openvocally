@@ -1,0 +1,4 @@
+interface:
+  display_name: "Merge When CI Passes"
+  short_description: "Monitor CI, squash-merge, and sync locally"
+  default_prompt: "Use $merge-when-ci-passes to monitor the current pull request, squash-merge it when green, and update the local base branch."

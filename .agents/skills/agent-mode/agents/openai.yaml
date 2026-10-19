@@ -1,0 +1,6 @@
+interface:
+  display_name: "Agent Mode"
+  short_description: "Run the full engineering workflow"
+  default_prompt: "Use $agent-mode to handle this task with the full engineering workflow."
+policy:
+  allow_implicit_invocation: true

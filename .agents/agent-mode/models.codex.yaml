@@ -1,0 +1,137 @@
+version: 2
+host: codex
+intent:
+  optimization: "Balanced quality and Codex 5x allowance usage"
+  budget: "No fixed per-task token or spend limit"
+delegation:
+  mode: enabled
+  max-workers-per-task: unlimited
+  max-concurrent-workers: host-limit
+  max-delegation-depth: unlimited
+roles:
+  feature:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: medium
+  refactoring:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: medium
+  bug-fix:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: high
+  perf-issue:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: high
+  hillclimb:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: medium
+  judgment-prose:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: medium
+  hardest-tasks:
+    execution: workers
+    workers:
+      - model: gpt-6-astra
+        reasoning: low
+  bulk-reader:
+    execution: workers
+    workers:
+      - model: gpt-6-luna
+        reasoning: max
+  comment-sicko:
+    execution: workers
+    workers:
+      - model: gpt-6-luna
+        reasoning: max
+  reviewer:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: high
+  how-explorer:
+    execution: workers
+    workers:
+      - model: gpt-6-luna
+        reasoning: max
+  how-explainer:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: medium
+  why-investigators:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: medium
+  why-synthesizer:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: medium
+  reflect-tooling:
+    execution: workers
+    workers:
+      - model: gpt-6-luna
+        reasoning: max
+  reflect-judgment:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: high
+  reflect-divergent:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: high
+  reflect-synthesizer:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: medium
+  arena-runners:
+    execution: workers
+    workers:
+      - model: gpt-6-luna
+        reasoning: max
+      - model: gpt-6.1-sol
+        reasoning: high
+  arena-cross-judge:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: high
+  swarm-worker:
+    execution: workers
+    workers:
+      - model: gpt-6-luna
+        reasoning: max
+  architect-runners:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: high
+      - model: gpt-6.1-sol
+        reasoning: medium
+  interrogate-reviewers:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: high
+      - model: gpt-6.1-sol
+        reasoning: medium
+  researcher:
+    execution: workers
+    workers:
+      - model: gpt-6.1-sol
+        reasoning: medium
