@@ -1,0 +1,20 @@
+<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>OpenVocally</title>
+        <item>
+            <title>1.0</title>
+            <pubDate>Mon, 19 Oct 2026 18:41:21 +0200</pubDate>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <sparkle:releaseNotesLink sparkle:edSignature="+bQjF/aYgEQwQ2k4UWr+EXtdHYI8SbBCOJzdsmK5SFI7eVpn/PNUufk36n8cqkGs/3O1Y0YCM9SmiMEe0kD9DA==" sparkle:length="735">https://raw.githubusercontent.com/MateuszRomek/openvocally/main/OpenVocally-1.0.md</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/MateuszRomek/openvocally/releases/download/v1.0/OpenVocally-1.0.zip" length="11379070" type="application/octet-stream" sparkle:edSignature="sWJZ6uYO1DNe85YZPy9wKUhTrPzfKC6fSdpShVdkowGfikMUCJDm5TfgpufZsc3vJVuNmRo9Qz0rdj3XkgUYBQ=="></enclosure>
+        </item>
+    </channel>
+</rss><!-- sparkle-signatures:
+edSignature: 2r8+0eHIhWzZ0Ury8WRYXE3SO8alQro37wXBBqIfhiHuhjSRDDIYVY24KfhqMc/4qwjoISWz4Uz9AwkILBXiBA==
+length: 1406
+-->
