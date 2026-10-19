@@ -11,7 +11,6 @@
   <img src="https://img.shields.io/badge/macOS-15%2B-black" alt="macOS 15 or newer">
   <img src="https://img.shields.io/badge/Apple%20Silicon-required-black" alt="Apple Silicon required">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-blue" alt="License: GPL-3.0-only"></a>
-  <a href="https://github.com/MateuszRomek/openvocally/actions/workflows/ci.yml"><img src="https://github.com/MateuszRomek/openvocally/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
 </p>
 
 <p align="center">
