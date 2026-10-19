@@ -11,11 +11,13 @@ concurrency:
   cancel-in-progress: true
 jobs:
   check:
-    runs-on: macos-26
+    # Xcode 27 is the minimum the README states; the macos-26 image defaults to Xcode 26.
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - run: sudo xcode-select --switch /Applications/Xcode_27.0.app
       - run: brew install xcodegen
       # The whisper.cpp build compiles its Metal shaders.
       - run: xcodebuild -downloadComponent MetalToolchain
