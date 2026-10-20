@@ -32,4 +32,4 @@ fi
 
 # A separate debug dylib signed by a certificate with no Team ID fails library validation.
 xcodebuild -project OpenVocally.xcodeproj -scheme OpenVocally -configuration Debug \
-  -derivedDataPath .build/DerivedData ENABLE_DEBUG_DYLIB=NO "${signing[@]}" build "$@"
+  -derivedDataPath .build/DerivedData ENABLE_DEBUG_DYLIB=NO ${signing[@]+"${signing[@]}"} build "$@"
