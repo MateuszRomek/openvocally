@@ -142,7 +142,7 @@ case "$rows" in
 esac
 
 cd "$(dirname "$0")/../.."
-app="$PWD/.build/DerivedData-perf/Build/Products/Debug/OpenVocally.app"
+app="$PWD/.build/DerivedData-perf/Build/Products/Debug/OpenVocally Dev.app"
 executable="$app/Contents/MacOS/OpenVocally"
 out="$PWD/.build/transcripts-latency"
 

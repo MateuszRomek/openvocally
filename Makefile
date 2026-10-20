@@ -29,7 +29,7 @@ test: whisper
 	swift test --package-path scripts/latency/model-bench
 
 build: generate
-	xcodebuild -project OpenVocally.xcodeproj -scheme OpenVocally -configuration Debug -derivedDataPath .build/DerivedData build
+	scripts/build-debug.sh
 
 check: lint test build
 

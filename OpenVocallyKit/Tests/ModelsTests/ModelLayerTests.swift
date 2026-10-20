@@ -6,8 +6,8 @@ import Testing
 @testable import Models
 
 struct ModelCatalogTests {
-  @Test(arguments: ModelID.allCases)
-  func `every pinned file has a size and a SHA-256`(model: ModelID) {
+  @Test(arguments: ModelID.downloadable)
+  func `every pinned file has a size and a SHA-256`(model: DownloadableModel) {
     let manifest = model.manifest
     #expect(!manifest.files.isEmpty)
     #expect(manifest.revision.count == 40)
@@ -18,11 +18,17 @@ struct ModelCatalogTests {
   }
 
   @Test func `files download from the pinned revision`() {
-    let manifest = ModelID.whisperTurbo.manifest
+    let manifest = DownloadableModel.whisperTurbo.manifest
     #expect(
       manifest.remoteURL(for: manifest.files[0]).absoluteString
         == "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-turbo.bin"
     )
+  }
+
+  @Test func `only models macOS installs have nothing to download`() {
+    #expect(ModelID.downloadable.map(\.id) == [.parakeetV3, .parakeetUltra, .whisperTurbo])
+    #expect(ModelID.appleDictation.downloadable == nil)
+    #expect(ModelID.appleSpeech.downloadable == nil)
   }
 
   @Test func `models install under the bundle ID local-models folder`() {
@@ -84,8 +90,10 @@ struct ModelDownloaderTests {
     }
   }
 
-  @Test(arguments: [ModelID.parakeetV3, .parakeetUltra, .whisperTurbo])
-  func `a verified download is installed and the staging folder is gone`(model: ModelID) async throws {
+  @Test(arguments: [DownloadableModel.parakeetV3, .parakeetUltra, .whisperTurbo])
+  func `a verified download is installed and the staging folder is gone`(model: DownloadableModel)
+    async throws
+  {
     defer { try? FileManager.default.removeItem(at: folder.root) }
     let reports = Reports()
     try await ModelDownloader(folder: folder, fetcher: FakeFetcher()).install(model) { reports.append($0) }

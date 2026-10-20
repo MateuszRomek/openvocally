@@ -3,15 +3,15 @@ import Foundation
 public enum Engine: String, CaseIterable, Sendable {
   case parakeet
   case whisper
+  case apple
 
   public var name: String {
     switch self {
     case .parakeet: "Parakeet"
     case .whisper: "Whisper"
+    case .apple: "Apple"
     }
   }
-
-  public var models: [ModelID] { ModelID.allCases.filter { $0.engine == self } }
 }
 
 /// One file of a model, pinned to the bytes the manifest script saw on Hugging Face.
@@ -48,6 +48,8 @@ public enum ModelID: String, CaseIterable, Sendable, Identifiable {
   case parakeetV3 = "parakeet-tdt-0.6b-v3-coreml"
   case parakeetUltra = "parakeet-ultra-coreml"
   case whisperTurbo = "large-v3-turbo"
+  case appleDictation = "apple-dictation-transcriber"
+  case appleSpeech = "apple-speech-transcriber"
 
   public static let preferred = ModelID.parakeetV3
 
@@ -57,6 +59,7 @@ public enum ModelID: String, CaseIterable, Sendable, Identifiable {
     switch self {
     case .parakeetV3, .parakeetUltra: .parakeet
     case .whisperTurbo: .whisper
+    case .appleDictation, .appleSpeech: .apple
     }
   }
 
@@ -65,6 +68,8 @@ public enum ModelID: String, CaseIterable, Sendable, Identifiable {
     case .parakeetV3: "Parakeet v3"
     case .parakeetUltra: "Parakeet Ultra"
     case .whisperTurbo: "Whisper Turbo"
+    case .appleDictation: "Dictation"
+    case .appleSpeech: "Speech"
     }
   }
 
@@ -76,24 +81,60 @@ public enum ModelID: String, CaseIterable, Sendable, Identifiable {
       "Moondream's retraining of Parakeet v3. Same 25 languages, with fewer mistakes."
     case .whisperTurbo:
       "OpenAI's Whisper large-v3, pruned for speed. Much faster, with a minor drop in quality."
+    case .appleDictation:
+      "Apple's dictation model, the one macOS keyboard dictation uses. Transcribes one language you choose."
+    case .appleSpeech:
+      "Apple's newer general transcription model, with full punctuation. Transcribes one language you choose."
     }
   }
 
-  public var manifest: ModelManifest {
+  public var source: ModelSource {
     switch self {
-    case .parakeetV3: .parakeetV3
-    case .parakeetUltra: .parakeetUltra
-    case .whisperTurbo: .whisperTurbo
+    case .parakeetV3: .huggingFace(.parakeetV3)
+    case .parakeetUltra: .huggingFace(.parakeetUltra)
+    case .whisperTurbo: .huggingFace(.whisperTurbo)
+    case .appleDictation: .system(.dictation)
+    case .appleSpeech: .system(.speech)
     }
   }
+
+  /// Nil exactly for a model macOS installs, which has no files of its own to fetch.
+  public var downloadable: DownloadableModel? {
+    switch source {
+    case .huggingFace(let manifest): DownloadableModel(id: self, manifest: manifest)
+    case .system: nil
+    }
+  }
+
+  public static var downloadable: [DownloadableModel] { allCases.compactMap(\.downloadable) }
+}
+
+/// Where a model's files come from.
+public enum ModelSource: Sendable {
+  case huggingFace(ModelManifest)
+  /// Speech assets macOS downloads and manages, one set per language.
+  case system(SystemModel)
+}
+
+/// A model whose files OpenVocally fetches, verifies and keeps in the local-models folder.
+public struct DownloadableModel: Sendable, Hashable, Identifiable {
+  public let id: ModelID
+  public let manifest: ModelManifest
+
+  public static let parakeetV3 = DownloadableModel(id: .parakeetV3, manifest: .parakeetV3)
+  public static let parakeetUltra = DownloadableModel(id: .parakeetUltra, manifest: .parakeetUltra)
+  public static let whisperTurbo = DownloadableModel(id: .whisperTurbo, manifest: .whisperTurbo)
+
+  public var rawValue: String { id.rawValue }
+  public var engine: Engine { id.engine }
+
+  public static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+  public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
   /// Where the model lives under the local-models folder: a folder per Parakeet model, a
   /// `ggml-*.bin` file per Whisper model.
   var installPath: String {
-    switch engine {
-    case .parakeet: "\(engine.rawValue)/\(rawValue)"
-    case .whisper: "whisper/ggml-\(rawValue).bin"
-    }
+    isSingleFile ? "whisper/ggml-\(rawValue).bin" : "\(engine.rawValue)/\(rawValue)"
   }
 
   /// Whisper is one file, installed by moving that file. The others install as a folder.

@@ -1,7 +1,9 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-let strict: [SwiftSetting] = [.treatAllWarnings(as: .error), .enableUpcomingFeature("ExistentialAny")]
+let strict: [SwiftSetting] = [
+  .treatAllWarnings(as: .error), .enableUpcomingFeature("ExistentialAny"),
+]
 
 let package = Package(
   name: "model-bench",

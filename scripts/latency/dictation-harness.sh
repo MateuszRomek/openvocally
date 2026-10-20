@@ -76,7 +76,7 @@ case "$mode" in
 esac
 
 cd "$(dirname "$0")/../.."
-catalog="$(sed -n '/^public enum ModelID/,/^}/s/^  case [A-Za-z0-9]* = "\(.*\)"$/\1/p' OpenVocallyKit/Sources/Models/ModelCatalog.swift)"
+catalog="$(sed -n '/^public enum ModelID/,/^}/s/^ *case [A-Za-z0-9]* = "\(.*\)"$/\1/p' OpenVocallyKit/Sources/Models/ModelCatalog.swift)"
 [[ -n "$catalog" ]] || {
   echo "No model ids found in ModelCatalog.swift." >&2
   exit 1
@@ -106,6 +106,16 @@ row="$(awk -F'\t' -v id="$fixture_id" 'NR > 1 && $1 == id' scripts/fixtures/fixt
 }
 fixture="$PWD/scripts/fixtures/$fixture_id.wav"
 expected="$(printf '%s' "$row" | cut -f4)"
+# The Apple models dictate in the language stored for them, which a hand-run session may have
+# changed. Launch arguments override it for this run only, in the fixture voice's language.
+voice="$(printf '%s' "$row" | cut -f2)"
+language=()
+locale="$(say -v '?' | awk -v voice="$voice" '$1 == voice { for (i = 2; i <= NF; i++) if ($i ~ /^[a-z]+_[A-Z]+$/) { print $i; exit } }')"
+if [[ -n "$locale" ]]; then
+  for model in apple-dictation-transcriber apple-speech-transcriber; do
+    language+=("-transcription.locale.$model" "$locale")
+  done
+fi
 
 root="$PWD/.build/dictation-harness/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$root"
@@ -115,7 +125,7 @@ scratch_root="$(mktemp -d "${TMPDIR:-/tmp}/dictation-harness.XXXXXX")"
 trap 'rm -rf "$scratch_root"' EXIT
 cp "$fixture" "$scratch_root/"
 fixture="$scratch_root/$(basename "$fixture")"
-executable="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally.app/Contents/MacOS/OpenVocally"
+executable="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally Dev.app/Contents/MacOS/OpenVocally"
 rows="$scratch_root/rows.tsv"
 : >"$rows"
 
@@ -147,7 +157,7 @@ json.dump(scenario, sys.stdout, ensure_ascii=False)
 
   start="$(date '+%Y-%m-%d %H:%M:%S')"
   RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh -dictationHarness "$scenario" -harnessOutput "$results" \
-    -dataFolder "$scratch/data" -ApplePersistenceIgnoreState YES || {
+    -dataFolder "$scratch/data" -ApplePersistenceIgnoreState YES ${language[@]+"${language[@]}"} || {
     echo "scripts/run-debug.sh failed." >&2
     printf '%s\tfailed\n' "${id:-active}" >>"$rows"
     return 1

@@ -85,7 +85,7 @@ actor ShippingStrategy<Model: WholeBufferTranscriber>: Strategy {
     self.engine = engine
     runtime = TranscriptionRuntime { _ in engine }
     // Any installed model id works: the loader above ignores it and returns the loaded engine.
-    await runtime.activate(.preferred)
+    await runtime.activate(.downloaded(.preferred))
   }
 
   func start() async {

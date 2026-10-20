@@ -6,7 +6,7 @@ extension ModelID {
   /// The name used on the command line and in results: the case name, for example `parakeetV3`.
   var benchName: String { String(describing: self) }
 
-  static var benchNames: [String] { allCases.map(\.benchName) }
+  static var benchNames: [String] { downloadable.map(\.id.benchName) }
 }
 
 /// What one timed session needs, shared by every model.
@@ -106,5 +106,6 @@ func modelFolders(first: String?) -> [ModelFolder] {
 
 /// The first folder holding a complete copy of `model`, by the shipping manifest's file sizes.
 func installedLocation(of model: ModelID, in folders: [ModelFolder]) -> URL? {
-  folders.first { $0.isInstalled(model) }?.location(of: model)
+  guard let hosted = model.downloadable else { return nil }
+  return folders.first { $0.isInstalled(hosted) }?.location(of: hosted)
 }

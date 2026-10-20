@@ -15,7 +15,7 @@ fi
 
 cd "$(dirname "$0")/../../.."
 status=0
-app=".build/DerivedData/Build/Products/Debug/OpenVocally.app"
+app=".build/DerivedData/Build/Products/Debug/OpenVocally Dev.app"
 support="$HOME/Library/Application Support/com.openvocally.app.debug"
 
 if [[ -d "$app" ]]; then
@@ -62,6 +62,12 @@ if [[ -d "$models" ]]; then
   find "$models" -mindepth 2 -maxdepth 2 ! -name '.*' | sed "s|^$models/|  |"
 else
   echo "models: none installed; the dictation harness needs one (open the app and pick one in Models)"
+fi
+macos="$(sw_vers -productVersion)"
+if ((${macos%%.*} >= 26)); then
+  echo "apple models: available on macOS $macos; macOS installs them, so the list above leaves them out"
+else
+  echo "apple models: unavailable on macOS $macos (needs 26)"
 fi
 
 if python3 -I -c 'import ctypes, sys; q = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics").CGPreflightScreenCaptureAccess; q.restype = ctypes.c_bool; sys.exit(0 if q() else 1)'; then

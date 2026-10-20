@@ -69,9 +69,9 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
     modelFolder = folder
     let transcription = TranscriptionRuntime.live(folder: folder)
     self.transcription = transcription
+    let downloader = ModelDownloader(folder: folder, fetcher: URLSessionFetcher())
     models = ModelLibrary(
-      folder: folder, downloader: ModelDownloader(folder: folder, fetcher: URLSessionFetcher()),
-      runtime: transcription)
+      folder: folder, downloader: downloader, runtime: transcription, systemModels: AppleSpeech.store())
     let history = History()
     self.history = history
     shortcuts = Shortcuts(history: history, promptsForAccessibility: !Onboarding.neededAtLaunch)
@@ -261,8 +261,8 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
     await history.close()
   }
 
-  /// macOS can disable the tap while the app sleeps or loses focus. A recording is
-  /// canceled before sleep so no capture straddles it.
+  /// macOS can disable the tap while the app sleeps or loses focus, and the tap must go when
+  /// Accessibility does. A recording is canceled before sleep so no capture straddles it.
   private func watchSystem(_ hotkeys: Hotkeys) async {
     let workspace = NSWorkspace.shared.notificationCenter
     let shortcuts = shortcuts
@@ -271,8 +271,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
         for await _ in NotificationCenter.default.notifications(
           named: NSApplication.didBecomeActiveNotification)
         {
-          hotkeys.ensureEnabled(reason: "app activation")
-          await shortcuts.refreshAccessibility()
+          await shortcuts.check(hotkeys, reason: "app activation")
         }
       }
       group.addTask {
@@ -282,13 +281,25 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
       }
       group.addTask {
         for await _ in workspace.notifications(named: NSWorkspace.didWakeNotification) {
-          hotkeys.ensureEnabled(reason: "wake")
+          await shortcuts.check(hotkeys, reason: "wake")
         }
       }
+      // Posted when any app's Accessibility switch changes. The new grant reads back a moment
+      // later, so a check right away could still see the old one.
       group.addTask {
+        for await _ in DistributedNotificationCenter.default().notifications(
+          named: Notification.Name("com.apple.accessibility.api"))
+        {
+          try? await Task.sleep(for: .milliseconds(250))
+          await shortcuts.check(hotkeys, reason: "accessibility change")
+        }
+      }
+      // A suspended tap waits for the grant once a second, as the start loop does.
+      group.addTask {
+        var installed = true
         while !Task.isCancelled {
-          try? await Task.sleep(for: .seconds(30))
-          hotkeys.ensureEnabled(reason: "health check")
+          try? await Task.sleep(for: installed ? .seconds(30) : .seconds(1))
+          installed = await shortcuts.check(hotkeys, reason: "health check")
         }
       }
     }

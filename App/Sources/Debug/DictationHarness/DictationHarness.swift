@@ -24,6 +24,7 @@
     }
 
     private static let modelWait = Duration.seconds(180)
+    /// How long a run may take past the fixture's own length.
     private static let runWait = Duration.seconds(30)
     /// Lets the overlay hide and the model idle between runs, as between two real dictations.
     private static let gap = Duration.milliseconds(1500)
@@ -85,12 +86,12 @@
       } catch {
         return (nil, .failed("scenario or fixture unreadable: \(error)"))
       }
-      if let model = scenario.model, !parts.folder.isInstalled(model) {
+      if let model = scenario.model, let hosted = model.downloadable, !parts.folder.isInstalled(hosted) {
         return (model, .skipped("\(model.rawValue) is not installed"))
       }
       let loaded =
         if let model = scenario.model {
-          await load(model, in: parts.runtime)
+          await load(model, in: parts.runtime, library: parts.models)
         } else {
           await waitForModel(parts.models)
         }
@@ -125,10 +126,11 @@
         let (down, up): (DictationCommand, DictationCommand) =
           run.mode == .pushToTalk ? (.pushToTalkStart, .pushToTalkStop) : (.toggle, .toggle)
         var presser: Task<HostTime, Never>?
-        let phase = await untilTerminal {
+        let length = Duration.seconds(Double(samples.count) / FixtureCapture.sampleRate)
+        let phase = await untilTerminal(within: length + runWait) {
           presser = Task {
             keys.yield(StampedCommand(command: down, at: .now()))
-            try? await Task.sleep(for: .seconds(Double(samples.count) / FixtureCapture.sampleRate))
+            try? await Task.sleep(for: length)
             let releasedAt = HostTime.now()
             keys.yield(StampedCommand(command: up, at: releasedAt))
             return releasedAt
@@ -171,15 +173,15 @@
       }
     }
 
-    /// Runs `trigger` and waits for the session to complete or fail, or nil after `runWait`.
-    private static func untilTerminal(_ trigger: () -> Void) async -> DictationPhase? {
+    /// Runs `trigger` and waits for the session to complete or fail, or nil after `wait`.
+    private static func untilTerminal(within wait: Duration, _ trigger: () -> Void) async -> DictationPhase? {
       terminalID += 1
       let id = terminalID
       return await withCheckedContinuation { continuation in
         terminal = continuation
         trigger()
         Task {
-          try? await Task.sleep(for: runWait)
+          try? await Task.sleep(for: wait)
           guard terminalID == id, let waiter = terminal else { return }
           terminal = nil
           waiter.resume(returning: nil)
@@ -188,17 +190,29 @@
     }
 
     /// Loads `model` on the runtime alone, so the library's stored active model stays as it was.
-    private static func load(_ model: ModelID, in runtime: TranscriptionRuntime) async -> String? {
-      let state = await withTaskGroup(of: RuntimeState?.self) { group in
-        group.addTask {
-          for await state in runtime.states where state != .loading { return state }
-          return nil
+    private static func load(
+      _ model: ModelID, in runtime: TranscriptionRuntime, library: ModelLibrary
+    ) async -> String? {
+      if model.downloadable == nil { await library.start() }
+      // macOS installs speech assets per app. For a language macOS already has, the install only
+      // reserves it for this app, so the harness does it instead of skipping the model.
+      if model.downloadable == nil, !library.installed.contains(model) {
+        library.startDownload(model)
+        let deadline = ContinuousClock.now + modelWait
+        while library.download != nil, ContinuousClock.now < deadline {
+          try? await Task.sleep(for: .milliseconds(100))
         }
+      }
+      guard let loaded = library.runtimeModel(for: model),
+        model.downloadable != nil || library.installed.contains(model)
+      else { return "\(model.rawValue) is not installed" }
+      await runtime.activate(loaded)
+      let state = await withTaskGroup(of: RuntimeState?.self) { group in
+        group.addTask { await runtime.settled() }
         group.addTask {
           try? await Task.sleep(for: modelWait)
           return nil
         }
-        await runtime.activate(model)
         let first = await group.next() ?? nil
         group.cancelAll()
         return first

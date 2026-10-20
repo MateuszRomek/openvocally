@@ -41,7 +41,11 @@ struct OpenVocallyScene: Scene {
     ) {
       MenuBarMenu(model: model)
     } label: {
-      Image("MenuBarLogo").accessibilityLabel("OpenVocally")
+      #if DEBUG
+        Image("MenuBarLogoDev").accessibilityLabel("OpenVocally Dev")
+      #else
+        Image("MenuBarLogo").accessibilityLabel("OpenVocally")
+      #endif
     }
     .menuBarExtraStyle(.menu)
     #if DEBUG

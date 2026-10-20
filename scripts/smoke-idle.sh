@@ -21,7 +21,7 @@ if [[ "${DEBUG_APP_LOCK_HELD:-}" != 1 ]]; then
   exec scripts/with-debug-app.sh scripts/smoke-idle.sh "$@"
 fi
 
-executable="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally.app/Contents/MacOS/OpenVocally"
+executable="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally Dev.app/Contents/MacOS/OpenVocally"
 limit=20
 settle_window=2
 settle_timeout=60

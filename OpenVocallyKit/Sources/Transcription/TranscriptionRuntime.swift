@@ -14,7 +14,7 @@ public enum RuntimeState: Sendable, Equatable {
 /// Keeps the active model loaded. It loads at launch and after a model change, unloads
 /// after 20 idle minutes, and loads again when the next dictation starts.
 public actor TranscriptionRuntime {
-  public typealias Loader = @Sendable (ModelID) async throws(TranscriptionError) -> any Transcriber
+  public typealias Loader = @Sendable (RuntimeModel) async throws(TranscriptionError) -> any Transcriber
   public typealias Load = Task<Result<any Transcriber, TranscriptionError>, Never>
   /// The 16 kHz recording so far, each sample as the final recording will have it, or nil once
   /// the recording ended.
@@ -32,16 +32,22 @@ public actor TranscriptionRuntime {
     }
   }
 
-  /// Every state change. The stream has one reader: the model library, or the dictation harness
-  /// when it loads a model without the library.
-  nonisolated public let states: AsyncStream<RuntimeState>
+  /// A stream that may still be opening, so a release before it opens waits for it instead of
+  /// starting a second session.
+  struct Streaming {
+    let session: Task<(any TranscriptionStream)?, Never>
+    var feed = StreamFeed()
+  }
+
+  /// Every state change. The stream has one reader, the model library; others call `settled()`.
+  nonisolated let states: AsyncStream<RuntimeState>
   private let continuation: AsyncStream<RuntimeState>.Continuation
   private let load: Loader
   private let idleTimeout: Duration
   private let sleep: @Sendable (Duration) async -> Void
   private let now: @Sendable () -> ContinuousClock.Instant
 
-  private var model: ModelID?
+  private var model: RuntimeModel?
   private var loaded: Load?
   private var inUse = 0
   private var idleTimer: Task<Void, Never>?
@@ -49,6 +55,8 @@ public actor TranscriptionRuntime {
   private let warmInterval: Duration
   private let listenInterval: Duration
   private var early: [EarlyCall] = []
+  /// The stream the current recording is fed into, for an engine that streams.
+  private var streaming: Streaming?
   private var drained: [CheckedContinuation<Void, Never>] = []
   private var isShutDown = false
 
@@ -72,23 +80,27 @@ public actor TranscriptionRuntime {
   public static func live(folder: ModelFolder) -> TranscriptionRuntime {
     // FluidAudio can log transcript text. Set before the first load.
     AppLogger.minimumLevel = .warning
-    return TranscriptionRuntime { (model) throws(TranscriptionError) in
-      switch model.engine {
-      case .parakeet:
-        return try await ParakeetTranscriber.load(model, modelDirectory: folder.location(of: model))
-      case .whisper: return try await WhisperTranscriber.load(modelFile: folder.location(of: model))
+    return TranscriptionRuntime { (loaded) throws(TranscriptionError) in
+      switch loaded {
+      case .downloaded(let model):
+        guard let hosted = model.downloadable else { throw .modelNotInstalled }
+        return model.engine == .whisper
+          ? try await WhisperTranscriber.load(modelFile: folder.location(of: hosted))
+          : try await ParakeetTranscriber.load(model, modelDirectory: folder.location(of: hosted))
+      case .system(let model, let locale): return try await AppleSpeech.load(model, locale: locale)
       }
     }
   }
 
   /// Switches to `model` and starts loading it. `nil` means no model is installed.
-  public func activate(_ model: ModelID?) {
+  public func activate(_ model: RuntimeModel?) {
     guard !isShutDown, model != self.model || loaded == nil else { return }
     loaded?.cancel()
     loaded = nil
     warming?.cancel()
     for call in early { call.result.cancel() }
     early = []
+    dropStream()
     self.model = model
     guard model != nil else {
       continuation.yield(.notInstalled)
@@ -113,7 +125,13 @@ public actor TranscriptionRuntime {
     warming = Task {
       await previous?.value
       early = []
+      dropStream()
       guard case .success(let transcriber) = await load.value else { return }
+      if let listen, !Task.isCancelled,
+        await stream(listen, into: transcriber, tick: tick, until: now() + interval * Self.maxPings)
+      {
+        return
+      }
       // A bound, so a recording that never reaches a stop cannot ping forever.
       let deadline = now() + interval * Self.maxPings
       var idleSince: ContinuousClock.Instant?
@@ -142,6 +160,65 @@ public actor TranscriptionRuntime {
         }
         await sleep(planner == nil ? interval : pace)
       }
+    }
+  }
+
+  /// Opens the engine's stream and feeds it the recording as it grows, until the release takes
+  /// it. False when the engine doesn't stream.
+  private func stream(
+    _ listen: Listen, into transcriber: any Transcriber, tick: Duration,
+    until deadline: ContinuousClock.Instant
+  ) async -> Bool {
+    let session = Task { () -> (any TranscriptionStream)? in
+      do throws(TranscriptionError) {
+        return try await transcriber.openStream()
+      } catch {
+        transcriptionLogger.error("Couldn't open a stream: \(String(describing: error), privacy: .public)")
+        return nil
+      }
+    }
+    streaming = Streaming(session: session)
+    guard let stream = await session.value else {
+      if streaming?.session == session { streaming = nil }
+      return false
+    }
+    while !Task.isCancelled, now() < deadline {
+      guard let recording = await listen() else { break }
+      guard !Task.isCancelled, streaming?.session == session else { break }
+      if let samples = streaming?.feed.next(recording) { stream.append(samples) }
+      await sleep(Self.listenPause(tick, recorded: recording.count))
+    }
+    return true
+  }
+
+  /// Cancels the open stream, if any, in the background: nothing waits on a dropped session.
+  private func dropStream() {
+    guard let session = streaming?.session else { return }
+    streaming = nil
+    Task { await session.value?.cancel() }
+  }
+
+  /// Finishes the stream with what it has not had yet. Nil when there is no stream, or it heard
+  /// a different recording or failed, so the caller transcribes the whole recording instead.
+  private func finishStream(_ samples: [Float]) async throws(TranscriptionError) -> String? {
+    guard let streaming else { return nil }
+    self.streaming = nil
+    guard let stream = await streaming.session.value else { return nil }
+    guard let rest = streaming.feed.rest(of: samples) else {
+      transcriptionLogger.notice("The stream heard a different recording; transcribing it whole")
+      await stream.cancel()
+      return nil
+    }
+    do {
+      return try await stream.finish(rest)
+    } catch .noSpeech {
+      throw .noSpeech
+    } catch .cancelled where Task.isCancelled {
+      throw .cancelled
+    } catch {
+      transcriptionLogger.error("The stream failed: \(String(describing: error), privacy: .public)")
+      await stream.cancel()
+      return nil
     }
   }
 
@@ -206,9 +283,20 @@ public actor TranscriptionRuntime {
   public func coolDown() {
     warming?.cancel()
     for call in early { call.result.cancel() }
+    dropStream()
   }
 
   var isLoaded: Bool { loaded != nil }
+
+  /// The state once the active model's load ends. For a caller that can't read `states`, whose
+  /// one reader is the model library once it starts.
+  public func settled() async -> RuntimeState {
+    guard let loaded else { return model == nil ? .notInstalled : .failed }
+    switch await loaded.value {
+    case .success: return .ready
+    case .failure(let error): return error == .modelNotInstalled ? .notInstalled : .failed
+    }
+  }
 
   /// Cancels the idle timer, early calls and a pending load, waits for them, then waits
   /// for in-flight transcriptions, whose callers cancel them, so no model outlives the call: a Whisper
@@ -222,6 +310,9 @@ public actor TranscriptionRuntime {
     early = []
     await drain(calls)
     await finishWarming()
+    let session = streaming?.session
+    streaming = nil
+    await session?.value?.cancel()
     let pending = loaded
     loaded = nil
     pending?.cancel()
@@ -252,6 +343,7 @@ public actor TranscriptionRuntime {
       if !isShutDown { scheduleUnload() }
     }
     let transcriber = try await load.value.get()
+    if let text = try await finishStream(samples) { return text }
     guard transcriber.lookahead != .off else { return try await transcriber.transcribe(samples) }
     let plan = ReleasePlanner.plan(finished: samples, transcriber.lookahead)
     let calls = early
@@ -363,6 +455,7 @@ public actor TranscriptionRuntime {
   private func unloadIfIdle() {
     guard inUse == 0, let loaded else { return }
     warming?.cancel()
+    dropStream()
     loaded.cancel()
     self.loaded = nil
   }

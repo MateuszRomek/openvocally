@@ -25,8 +25,20 @@ private final class FakeTap: Sendable {
         self.calls.withLock { $0.append("enable") }
         self.enabled.withLock { $0 = true }
         onEnable()
-      })
+      },
+      disable: { self.calls.withLock { $0.append("disable") } })
   }
+}
+
+/// The grants the tap checks, switchable mid-test.
+private final class Trust: Sendable {
+  let granted: Mutex<Bool>
+
+  init(_ granted: Bool) {
+    self.granted = Mutex(granted)
+  }
+
+  var check: @Sendable () -> Bool { { self.granted.withLock { $0 } } }
 }
 
 private func firstCommands(_ hotkeys: Hotkeys, _ count: Int) async -> [DictationCommand] {
@@ -101,25 +113,25 @@ struct HotkeysRebindTests {
     #expect(commands == [.pushToTalkStart, .pushToTalkStop])
   }
 
-  @Test func ensureEnabledOnAnEnabledTapKeepsTheHold() {
-    let hotkeys = Hotkeys(bindings: .chordFixture)
+  @Test func ensureEnabledOnAnEnabledTapKeepsTheHold() async {
+    let hotkeys = Hotkeys(bindings: .chordFixture, isTrusted: { true })
     let tap = FakeTap(enabled: true)
     hotkeys.attachTap { tap.control() }
     #expect(hotkeys.handle(.down(.l, [.command, .shift])).emits == [.pushToTalkStart])
-    hotkeys.ensureEnabled()
+    #expect(await hotkeys.ensureEnabled())
     #expect(tap.calls.withLock { $0 }.isEmpty)
     #expect(hotkeys.handle(.up(.l, [.command, .shift])).emits == [.pushToTalkStop])
   }
 
   /// A press the re-enabled tap delivers right away must survive the reset.
   @Test func ensureEnabledReleasesTheHoldBeforeEnabling() async {
-    let hotkeys = Hotkeys(bindings: .chordFixture)
+    let hotkeys = Hotkeys(bindings: .chordFixture, isTrusted: { true })
     let tap = FakeTap(enabled: false)
     hotkeys.attachTap {
       tap.control { _ = hotkeys.handle(.down(.l, [.command, .shift])) }
     }
     _ = hotkeys.handle(.down(.l, [.command, .shift]))
-    hotkeys.ensureEnabled()
+    await hotkeys.ensureEnabled()
     #expect(tap.calls.withLock { $0 } == ["enable"])
     let commands = await firstCommands(hotkeys, 3)
     #expect(commands == [.pushToTalkStart, .pushToTalkStop, .pushToTalkStart])
@@ -127,7 +139,7 @@ struct HotkeysRebindTests {
 
   /// The system disables a tap whose callback stalls; the next push-to-talk must not stay held.
   @Test func tapDisabledByTimeoutReleasesTheHoldAndReEnables() async {
-    let hotkeys = Hotkeys(bindings: .chordFixture)
+    let hotkeys = Hotkeys(bindings: .chordFixture, isTrusted: { true })
     let tap = FakeTap(enabled: false)
     hotkeys.attachTap { tap.control() }
     _ = hotkeys.handle(.down(.l, [.command, .shift]))
@@ -136,6 +148,72 @@ struct HotkeysRebindTests {
     #expect(tap.enabled.withLock { $0 })
     let commands = await firstCommands(hotkeys, 2)
     #expect(commands == [.pushToTalkStart, .pushToTalkStop])
+  }
+}
+
+/// Without the right to post events, WindowServer drops every event an active tap passes, so
+/// re-enabling it would freeze all input on the Mac.
+struct HotkeysTrustTests {
+  @Test func `a timeout without the grants removes the tap instead of re-enabling it`() async {
+    let hotkeys = Hotkeys(bindings: .chordFixture, isTrusted: { false })
+    let tap = FakeTap(enabled: false)
+    hotkeys.attachTap { tap.control() }
+    _ = hotkeys.handle(.down(.l, [.command, .shift]))
+    hotkeys.tapWasDisabled(.tapDisabledByTimeout)
+    #expect(tap.calls.withLock { $0 } == ["disable"])
+    #expect(await firstCommands(hotkeys, 2) == [.pushToTalkStart, .pushToTalkStop])
+  }
+
+  @Test func `a check without the grants removes an enabled tap`() async {
+    let hotkeys = Hotkeys(bindings: .chordFixture, isTrusted: { false })
+    let tap = FakeTap(enabled: true)
+    hotkeys.attachTap { tap.control() }
+    #expect(await hotkeys.ensureEnabled() == false)
+    #expect(tap.calls.withLock { $0 } == ["disable"])
+    #expect(await hotkeys.ensureEnabled() == false)
+    #expect(tap.calls.withLock { $0 } == ["disable"])
+  }
+
+  @Test func `a check reinstalls the tap once the grants are back`() async {
+    let trust = Trust(true)
+    let first = FakeTap(enabled: true)
+    let second = FakeTap(enabled: true)
+    let hotkeys = Hotkeys(bindings: .chordFixture, isTrusted: trust.check) { hotkeys in
+      hotkeys.attachTap { second.control() }
+    }
+    hotkeys.attachTap { first.control() }
+    trust.granted.withLock { $0 = false }
+    #expect(await hotkeys.ensureEnabled() == false)
+    trust.granted.withLock { $0 = true }
+    #expect(await hotkeys.ensureEnabled())
+    #expect(first.calls.withLock { $0 } == ["disable"])
+    hotkeys.stop()
+    #expect(second.calls.withLock { $0 } == ["disable"])
+  }
+
+  @Test func `a failed reinstall stays suspended and tries again`() async {
+    let trust = Trust(false)
+    let installs = DisableCount()
+    let hotkeys = Hotkeys(bindings: .chordFixture, isTrusted: trust.check) { _ in
+      installs.value.withLock { $0 += 1 }
+      return false
+    }
+    hotkeys.attachTap { FakeTap(enabled: true).control() }
+    #expect(await hotkeys.ensureEnabled() == false)
+    trust.granted.withLock { $0 = true }
+    #expect(await hotkeys.ensureEnabled() == false)
+    #expect(await hotkeys.ensureEnabled() == false)
+    #expect(installs.value.withLock { $0 } == 2)
+    hotkeys.stop()
+    #expect(await hotkeys.ensureEnabled() == false)
+    #expect(installs.value.withLock { $0 } == 2)
+  }
+
+  @Test func `no tap installs after stop`() async {
+    let hotkeys = Hotkeys(bindings: .chordFixture, isTrusted: { true })
+    hotkeys.stop()
+    #expect(hotkeys.attachTap { FakeTap(enabled: true).control() } == false)
+    #expect(await hotkeys.ensureEnabled() == false)
   }
 }
 

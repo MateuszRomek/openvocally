@@ -86,9 +86,9 @@ struct ParakeetTranscriberTests {
 }
 
 struct ParakeetManifestTests {
-  @Test(arguments: [ModelID.parakeetV3, .parakeetUltra])
-  func `Parakeet installs every file FluidAudio loads`(model: ModelID) throws {
-    let folder = try #require(ParakeetTranscriber.repositoryFolder(of: model))
+  @Test(arguments: [DownloadableModel.parakeetV3, .parakeetUltra])
+  func `Parakeet installs every file FluidAudio loads`(model: DownloadableModel) throws {
+    let folder = try #require(ParakeetTranscriber.repositoryFolder(of: model.id))
     let paths = Set(model.manifest.files.map { model.manifest.localPath(for: $0) })
     for file in ParakeetTranscriber.installedFiles {
       #expect(paths.contains { $0.hasPrefix("\(folder)/\(file)") }, "\(file)")

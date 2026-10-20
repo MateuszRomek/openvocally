@@ -18,32 +18,62 @@ public enum RebindError: Error, Equatable {
 
 private let logger = Logger(subsystem: "com.openvocally.app", category: "hotkeys")
 
-/// Owns one active keyboard event tap on a dedicated thread for the life of the process.
+/// Where the tap stands. An active tap sends every key and click it passes as this process, so
+/// once the process may no longer post events, WindowServer drops them all and the whole Mac
+/// stops taking input. The tap is suspended then, and installed again once the grant is back.
+enum TapSlot {
+  case installing
+  case installed(EventTapControl)
+  case suspended
+  case stopped
+}
+
+/// Owns one active keyboard event tap on a dedicated thread for the life of the process, except
+/// while the process lacks the grants an active tap needs.
 public final class Hotkeys: Sendable {
   public let events: AsyncStream<StampedCommand>
   private let matcher: Mutex<HotkeyMatcher>
   /// `CFMachPort` is not Sendable; the lock lets `ensureEnabled` reach it from any thread.
   /// Lock order: tapPort, then matcher.
-  private let tapPort = Mutex<EventTapControl?>(nil)
+  private let tapPort = Mutex<TapSlot>(.installing)
+  /// Whether the process may run an active tap now.
+  private let isTrusted: @Sendable () -> Bool
+  /// Starts a tap thread that calls `installTap`, and returns whether it installed.
+  private let install: @Sendable (Hotkeys) async -> Bool
   /// Held across a whole transactional rebind so two rebinds cannot interleave persist and swap.
   private let rebindLock = Mutex<Void>(())
   private let continuation: AsyncStream<StampedCommand>.Continuation
 
-  init(bindings: HotkeyBindings) {
+  init(
+    bindings: HotkeyBindings, isTrusted: @escaping @Sendable () -> Bool = Hotkeys.systemTrust,
+    install: @escaping @Sendable (Hotkeys) async -> Bool = Hotkeys.spawnTap
+  ) {
     (events, continuation) = AsyncStream<StampedCommand>.makeStream()
     matcher = Mutex(HotkeyMatcher(bindings: bindings))
+    self.isTrusted = isTrusted
+    self.install = install
   }
 
-  public static func start(bindings: HotkeyBindings) async throws(HotkeysStartError) -> Hotkeys {
-    guard AXIsProcessTrusted() else { throw .accessibilityNotGranted }
-    let hotkeys = Hotkeys(bindings: bindings)
-    let installed = await withCheckedContinuation { (started: CheckedContinuation<Bool, Never>) in
+  /// Accessibility lets the tap filter events. WindowServer checks the right to post events
+  /// separately, on its own schedule, for every event the tap passes, and a rebuilt or re-signed
+  /// app can lose that right while it runs.
+  static func systemTrust() -> Bool {
+    AXIsProcessTrusted() && CGPreflightPostEventAccess()
+  }
+
+  static func spawnTap(_ hotkeys: Hotkeys) async -> Bool {
+    await withCheckedContinuation { (started: CheckedContinuation<Bool, Never>) in
       let thread = Thread { runTap(hotkeys: hotkeys, started: started) }
       thread.name = "com.openvocally.hotkeys"
       thread.qualityOfService = .userInteractive
       thread.start()
     }
-    guard installed else {
+  }
+
+  public static func start(bindings: HotkeyBindings) async throws(HotkeysStartError) -> Hotkeys {
+    let hotkeys = Hotkeys(bindings: bindings)
+    guard hotkeys.isTrusted() else { throw .accessibilityNotGranted }
+    guard await hotkeys.install(hotkeys) else {
       logger.error("Keyboard event tap creation failed")
       throw .tapCreationFailed
     }
@@ -96,46 +126,93 @@ public final class Hotkeys: Sendable {
     transition(at: .now()) { ((), $0.setMode(mode).map { [$0] } ?? []) }
   }
 
-  /// Re-enables a tap the system disabled. A no-op while the tap is enabled, so a held
-  /// push-to-talk survives.
-  public func ensureEnabled(reason: String = "check") {
-    guard resetAndEnable(onlyIfDisabled: true) != nil else { return }
-    logger.notice("Event tap was disabled; re-enabled on \(reason, privacy: .public)")
+  /// Suspends the tap when the grants are gone, installs it again when they are back, and
+  /// re-enables a tap the system disabled. A no-op on an enabled, trusted tap, so a held
+  /// push-to-talk survives. Returns whether the tap is installed after.
+  @discardableResult public func ensureEnabled(reason: String = "check") async -> Bool {
+    let trusted = isTrusted()
+    let reinstall = tapPort.withLock { slot -> Bool in
+      switch slot {
+      case .installing, .stopped:
+        return false
+      case .suspended:
+        guard trusted else { return false }
+        slot = .installing
+        return true
+      case .installed(let tap):
+        if !trusted {
+          suspend(&slot, tap)
+          logger.error("Event tap suspended on \(reason, privacy: .public): no right to post events")
+        } else if !tap.isEnabled() {
+          reset()
+          tap.enable()
+          logger.notice("Event tap was disabled; re-enabled on \(reason, privacy: .public)")
+        }
+        return false
+      }
+    }
+    if reinstall {
+      let installed = await install(self)
+      if !installed { tapPort.withLock { if case .installing = $0 { $0 = .suspended } } }
+      logger.notice("Event tap reinstalled on \(reason, privacy: .public): \(installed, privacy: .public)")
+    }
+    return tapPort.withLock { if case .installed = $0 { true } else { false } }
   }
 
-  /// The tap's answer to the system disabling it, by timeout or user input: releases
-  /// any hold and re-enables, whatever the tap reports.
+  /// The tap's answer to the system disabling it, by timeout or user input: releases any hold,
+  /// then re-enables, whatever the tap reports. Without the grants it suspends instead, since
+  /// WindowServer would drop every event the tap passed.
   func tapWasDisabled(_ type: CGEventType) {
-    let enabled = resetAndEnable(onlyIfDisabled: false) ?? false
-    logger.notice(
-      "Event tap disabled by \(type == .tapDisabledByTimeout ? "timeout" : "user input", privacy: .public), re-enabled: \(enabled, privacy: .public)"
-    )
+    let trusted = isTrusted()
+    let enabled = tapPort.withLock { slot -> Bool in
+      guard case .installed(let tap) = slot else { return false }
+      guard trusted else {
+        suspend(&slot, tap)
+        return false
+      }
+      reset()
+      tap.enable()
+      return tap.isEnabled()
+    }
+    let cause = type == .tapDisabledByTimeout ? "timeout" : "user input"
+    if trusted {
+      logger.notice(
+        "Event tap disabled by \(cause, privacy: .public), re-enabled: \(enabled, privacy: .public)")
+    } else {
+      logger.error("Event tap disabled by \(cause, privacy: .public); suspended: no right to post events")
+    }
   }
 
   /// Removes the tap and ends `events`. Safe to call more than once.
   public func stop() {
-    tapPort.withLock { tap in
-      tap?.disable()
-      tap = nil
+    tapPort.withLock { slot in
+      if case .installed(let tap) = slot { tap.disable() }
+      slot = .stopped
     }
     continuation.finish()
   }
 
-  /// Releases the hold before enabling, under the tap lock, so a press the re-enabled tap
-  /// delivers is never stopped by this reset. Returns whether the tap is enabled after, or nil
-  /// when nothing was done.
-  private func resetAndEnable(onlyIfDisabled: Bool) -> Bool? {
-    tapPort.withLock { tap -> Bool? in
-      guard let tap, !(onlyIfDisabled && tap.isEnabled()) else { return nil }
-      transition(at: .now()) { ((), $0.tapWasReset().map { [$0] } ?? []) }
-      tap.enable()
-      return tap.isEnabled()
-    }
+  /// Removes the tap, which ends its thread, and releases any hold. Callers hold `tapPort`.
+  private func suspend(_ slot: inout TapSlot, _ tap: EventTapControl) {
+    tap.disable()
+    slot = .suspended
+    reset()
   }
 
-  /// Creates the control inside the lock, because `EventTapControl` is not Sendable.
-  func attachTap(_ make: () -> sending EventTapControl?) {
-    tapPort.withLock { $0 = make() }
+  /// Releases any hold. Before enabling, and under the tap lock, so a press the re-enabled tap
+  /// delivers is never stopped by this reset.
+  private func reset() {
+    transition(at: .now()) { ((), $0.tapWasReset().map { [$0] } ?? []) }
+  }
+
+  /// Creates the control inside the lock, because `EventTapControl` is not Sendable. Installs
+  /// only while an install is due, so a tap created after `stop()` is removed at once.
+  @discardableResult func attachTap(_ make: () -> sending EventTapControl?) -> Bool {
+    tapPort.withLock { slot in
+      guard case .installing = slot, let tap = make() else { return false }
+      slot = .installed(tap)
+      return true
+    }
   }
 
   /// Runs one key event through the matcher, as the tap does.
@@ -150,7 +227,8 @@ public final class Hotkeys: Sendable {
   /// outside could not be moved in, because `CFMachPort` is not Sendable. The context pointer
   /// arrives as an address for the same reason: a captured pointer would tie the port to the caller.
   func installTap(context: UInt) -> Bool {
-    tapPort.withLock { stored in
+    tapPort.withLock { slot in
+      guard case .installing = slot else { return false }
       let mask =
         CGEventMask(1 << CGEventType.keyDown.rawValue) | CGEventMask(1 << CGEventType.keyUp.rawValue)
         | CGEventMask(1 << CGEventType.flagsChanged.rawValue)
@@ -170,7 +248,7 @@ public final class Hotkeys: Sendable {
       let source = CFMachPortCreateRunLoopSource(nil, port, 0)
       CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
       CGEvent.tapEnable(tap: port, enable: true)
-      stored = EventTapControl(port: port)
+      slot = .installed(EventTapControl(port: port))
       return true
     }
   }

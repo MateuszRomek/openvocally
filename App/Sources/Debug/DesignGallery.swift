@@ -64,6 +64,7 @@
     case sidebar
     case panels
     case motion
+    case language
   }
 
   /// Hosts content in its own NSHostingView so system colors, materials and glass resolve
@@ -134,6 +135,7 @@
           case .sidebar: SidebarSection()
           case .panels: PanelsSection()
           case .motion, .overlay: EmptyView()
+          case .language: LanguageSection()
           }
         }
       }
@@ -324,6 +326,24 @@
             "Update Available", detail: "1.4.0", systemImage: "arrow.down.circle.fill", action: {})
           SidebarRow("Settings", systemImage: "gearshape", isSelected: false, action: {})
         }
+      }
+    }
+  }
+
+  private struct LanguageSection: View {
+    private let languages = ["en_US", "en_GB", "pl_PL", "de_DE", "es_ES", "fr_FR", "ja_JP"]
+      .map(Locale.init(identifier:))
+
+    var body: some View {
+      VStack(alignment: .leading, spacing: Space.l.points) {
+        SectionTitle(text: "Language picker")
+        SectionHeader(title: "Control", detail: "Chosen, then none chosen")
+        LanguagePicker(languages: languages, chosen: languages[2]) { _ in }
+        LanguagePicker(languages: languages, chosen: nil) { _ in }
+        SectionHeader(title: "Popover content")
+        LanguagePopover(languages: languages, chosen: languages[2]) { _ in }
+          .frame(width: 300, height: 360)
+          .background(.token(.selection), in: Radius.panel.shape)
       }
     }
   }

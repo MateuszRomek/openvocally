@@ -13,9 +13,9 @@ struct ModelsView: View {
 
   var body: some View {
     Form {
-      ForEach(Engine.allCases, id: \.self) { engine in
+      ForEach(library.engines, id: \.self) { engine in
         Section {
-          ForEach(engine.models) { model in
+          ForEach(library.models(of: engine)) { model in
             ModelRow(library: library, model: model, delete: { deleting = model })
           }
         } header: {
@@ -46,8 +46,8 @@ struct ModelsView: View {
   }
 
   private func deleteMessage(_ model: ModelID) -> String {
-    let size = model.manifest.totalBytes.formatted(.byteCount(style: .file))
-    let frees = "This frees \(size). You can download it again later."
+    let size = model.downloadable?.manifest.totalBytes.formatted(.byteCount(style: .file))
+    let frees = "\(size.map { "This frees \($0). " } ?? "")You can download it again later."
     guard model == library.active, let replacement = library.replacement(for: model) else { return frees }
     return "\(replacement.name) becomes the active model. \(frees)"
   }
@@ -90,7 +90,7 @@ private struct ModelRow: View {
     LabeledContent {
       HStack(spacing: Space.s.points) {
         trailing.transition(.opacity)
-        if isInstalled { actions.transition(.opacity) }
+        if isInstalled, model.downloadable != nil { actions.transition(.opacity) }
       }
       .motion(.windowReveal, value: state)
     } label: {
@@ -104,9 +104,10 @@ private struct ModelRow: View {
         }
         HStack(spacing: Space.xs.points) {
           if let activeTag { activeTag.transition(Motion.confirmEntrance(reduceMotion: reduceMotion)) }
-          ForEach(model.facts, id: \.self) { Tag($0) }
+          ForEach(facts, id: \.self) { Tag($0) }
         }
         .motion(.confirm, value: ActiveBadge(shown: activeTag != nil, runtime: library.runtime))
+        languages
         if let problem {
           Label {
             Text(problem).textStyle(.callout).foregroundStyle(.secondary)
@@ -123,6 +124,13 @@ private struct ModelRow: View {
     .contextMenu { if isInstalled { menuItems } }
   }
 
+  private var facts: [String] {
+    if case .system = model.source {
+      return ["\(library.languages(of: model).count) languages", "Installed by macOS"]
+    }
+    return model.facts
+  }
+
   /// Only the active row is tagged, with the runtime's state once it is on disk.
   private var activeTag: Tag? {
     guard isActive, isInstalled, download == nil else { return nil }
@@ -136,14 +144,14 @@ private struct ModelRow: View {
   private var problem: String? {
     if let failure = library.failures[model] { return failure.message(for: model) }
     guard isActive, isInstalled, download == nil, library.runtime == .failed else { return nil }
-    return "Couldn't load. Download it again, or OpenVocally tries again on your next dictation."
+    return library.recovery(for: model).loadFailure
   }
 
   /// What the row's trailing control shows. Changes between states crossfade, so a finished
   /// download or a new active model doesn't snap.
   private enum Trailing: Equatable {
     case downloading
-    case downloadAgain
+    case recover
     case none
     case use
     case download
@@ -151,7 +159,7 @@ private struct ModelRow: View {
 
   private var state: Trailing {
     if download != nil { return .downloading }
-    if isActive, isInstalled { return library.runtime == .failed ? .downloadAgain : .none }
+    if isActive, isInstalled { return library.runtime == .failed ? .recover : .none }
     return isInstalled ? .use : .download
   }
 
@@ -159,8 +167,8 @@ private struct ModelRow: View {
     switch state {
     case .downloading:
       if let download { DownloadProgressView(download: download, cancel: library.cancelDownload) }
-    case .downloadAgain:
-      Button("Download Again") { library.redownload(model) }
+    case .recover:
+      Button(library.recovery(for: model).title) { Task { await library.recover(model) } }
         .appButton(.primary)
         .disabled(library.download != nil)
     case .none:
@@ -171,9 +179,24 @@ private struct ModelRow: View {
     case .download:
       Button(library.failures[model] == nil ? "Download" : "Try Again") { library.startDownload(model) }
         .appButton(isActive ? .primary : .secondary)
-        .disabled(library.download != nil)
-        .help(library.download != nil ? "Another model is downloading. Finish or cancel it first." : "")
+        .disabled(library.download != nil || needsLanguage)
+        .help(downloadHelp)
     }
+  }
+
+  private var downloadHelp: String {
+    if library.download != nil { return "Another model is downloading. Finish or cancel it first." }
+    return needsLanguage ? "Choose a language first." : ""
+  }
+
+  /// A system model downloads one language, so it waits until there is one.
+  private var needsLanguage: Bool {
+    if case .system = model.source { return library.locale(of: model) == nil }
+    return false
+  }
+
+  @ViewBuilder private var languages: some View {
+    if case .system = model.source { LanguageControl(library: library, model: model) }
   }
 
   /// The active model can go only when another installed model takes over.
@@ -181,12 +204,15 @@ private struct ModelRow: View {
     download == nil && (!isActive || library.replacement(for: model) != nil)
   }
 
+  /// Only files OpenVocally downloaded can be shown or deleted; macOS manages its own.
   @ViewBuilder private var menuItems: some View {
-    Button("Show in Finder") {
-      NSWorkspace.shared.activateFileViewerSelecting([library.location(of: model)])
+    if let location = library.location(of: model) {
+      Button("Show in Finder") {
+        NSWorkspace.shared.activateFileViewerSelecting([location])
+      }
+      Divider()
+      Button("Delete…", role: .destructive, action: delete).disabled(!canDelete)
     }
-    Divider()
-    Button("Delete…", role: .destructive, action: delete).disabled(!canDelete)
   }
 
   private var actions: some View {
@@ -207,10 +233,11 @@ extension ModelID {
   /// Facts shown as tags under the summary: languages where the model card states them, then
   /// the download size.
   fileprivate var facts: [String] {
-    let size = manifest.totalBytes.formatted(.byteCount(style: .file))
-    switch self {
-    case .parakeetV3, .parakeetUltra: return ["25 languages", size]
-    case .whisperTurbo: return ["99 languages", size]
+    switch source {
+    case .huggingFace(let manifest):
+      let size = manifest.totalBytes.formatted(.byteCount(style: .file))
+      return [engine == .whisper ? "99 languages" : "25 languages", size]
+    case .system: return []
     }
   }
 }
@@ -232,7 +259,9 @@ private struct DownloadProgressView: View {
           .frame(minWidth: 32, alignment: .trailing)
       } else {
         ProgressView().controlSize(.small)
-        Text("Verifying").textStyle(.callout).foregroundStyle(.secondary)
+        Text(download.progress == .verifying ? "Verifying" : "Downloading")
+          .textStyle(.callout)
+          .foregroundStyle(.secondary)
       }
       Button("Cancel", action: cancel).appButton()
     }
@@ -258,30 +287,54 @@ extension ModelLibrary {
 
   var statusDetail: String {
     if let download, download.model == active {
-      return download.fraction.map { "Downloading, \($0.formatted(.percent.precision(.fractionLength(0))))" }
-        ?? "Checking the download"
+      if let fraction = download.fraction {
+        return "Downloading, \(fraction.formatted(.percent.precision(.fractionLength(0))))"
+      }
+      return download.progress == .verifying ? "Checking the download" : "Downloading"
     }
     switch runtime {
     case .ready: return "Ready to dictate"
     case .loading: return "Loading"
     case .notInstalled: return "Not downloaded yet. Download it below to start dictating."
-    case .failed:
-      return "Couldn't load. Download it again, or OpenVocally tries again on your next dictation."
+    case .failed: return recovery(for: active).loadFailure
+    }
+  }
+}
+
+extension ModelLibrary.Recovery {
+  var title: String {
+    switch self {
+    case .downloadAgain: "Download Again"
+    case .tryAgain: "Try Again"
+    }
+  }
+
+  var loadFailure: String {
+    switch self {
+    case .downloadAgain:
+      "Couldn't load. Download it again, or OpenVocally tries again on your next dictation."
+    case .tryAgain: "Couldn't load. Try again, or OpenVocally tries again on your next dictation."
     }
   }
 }
 
 extension DownloadError {
   func message(for model: ModelID) -> String {
-    switch self {
+    if case .system = model.source { return systemMessage }
+    return switch self {
     case .busy: "Another model is downloading. Finish or cancel it first."
     case .cancelled: "The download was cancelled."
     case .offline: "Couldn't reach Hugging Face. Check your connection and try again."
     case .server(let status): "Hugging Face answered with error \(status). Try again later."
     case .corrupted: "The download didn't match the published files, so nothing was installed. Try again."
     case .diskFull:
-      "Not enough disk space. Free up \(model.manifest.totalBytes.formatted(.byteCount(style: .file))) and try again."
+      if let size = model.downloadable?.manifest.totalBytes.formatted(.byteCount(style: .file)) {
+        "Not enough disk space. Free up \(size) and try again."
+      } else {
+        "Not enough disk space. Free up some space and try again."
+      }
     case .fileSystem: "Couldn't save the model files. Try again."
+    case .reservationLimit: systemMessage
     }
   }
 }

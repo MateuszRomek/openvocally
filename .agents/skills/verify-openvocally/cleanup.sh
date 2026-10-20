@@ -19,7 +19,7 @@ if [[ "${DEBUG_APP_LOCK_HELD:-}" != 1 ]]; then
 fi
 
 for dir in DerivedData DerivedData-perf; do
-  executable="$PWD/.build/$dir/Build/Products/Debug/OpenVocally.app/Contents/MacOS/OpenVocally"
+  executable="$PWD/.build/$dir/Build/Products/Debug/OpenVocally Dev.app/Contents/MacOS/OpenVocally"
   for pid in $(ps -axo pid=,comm= | awk -v exe="$executable" '{ pid = $1; sub(/^[ \t]*[0-9]+[ \t]+/, ""); if ($0 == exe) print pid }'); do
     kill "$pid"
     for _ in $(seq 1 20); do
