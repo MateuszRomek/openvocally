@@ -6,6 +6,17 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>OpenVocally</title>
         <item>
+            <title>1.0.3</title>
+            <pubDate>Tue, 20 Oct 2026 11:57:02 +0200</pubDate>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.0.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[- Small improvements to the recording overlay.
+]]></description>
+            <enclosure url="https://github.com/MateuszRomek/openvocally/releases/download/v1.0.3/OpenVocally-1.0.3.zip" length="11385667" type="application/octet-stream" sparkle:edSignature="ixZmj9otOFvV0xpJMy9HFFaY/r1fRTbSquQD/hX2chWhaJ8Wy4HvEMkLTIhsDVr4ePxgrxIoSKaoAjuXo6HECw=="/>
+        </item>
+        <item>
             <title>1.0.2</title>
             <pubDate>Mon, 19 Oct 2026 20:33:23 +0200</pubDate>
             <sparkle:version>3</sparkle:version>
@@ -52,6 +63,6 @@ Requires a Mac with Apple Silicon and macOS 15 or newer.
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: cBD54ZvcA3rdLhMyWAaiuYNglu/slyhUF2IKgx0F4+prTESz2qld2woUfuvEZU66fQhdnwJ5dcBRavX+nCnaCg==
-length: 3525
+edSignature: 4o3cSxH9kJEENPumtrfdNEwisE91ogjvGCHjXfuQKsP/OZi/JJuV8wIo5B7icXf6ASAkR+LEAas/9eMBqSnjCg==
+length: 4341
 -->
