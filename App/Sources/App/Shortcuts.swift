@@ -83,10 +83,18 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
     store = database
   }
 
-  /// Accessibility changes in System Settings, so it is read again when the app comes back to
-  /// the front.
-  func refreshAccessibility() {
+  /// Accessibility changes in System Settings, so it is read again on every check.
+  private func refreshAccessibility() {
     accessibilityGranted = AXIsProcessTrusted()
+  }
+
+  /// Checks the hotkeys' grants and tap, and shows the result. Returns whether the tap is
+  /// installed; a suspended one needs Accessibility again.
+  @discardableResult func check(_ hotkeys: Hotkeys, reason: String) async -> Bool {
+    let installed = await hotkeys.ensureEnabled(reason: reason)
+    availability = installed ? .ready : .needsAccessibility
+    refreshAccessibility()
+    return installed
   }
 
   func stop() {

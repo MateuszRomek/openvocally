@@ -18,7 +18,9 @@ struct ModelSetupCard: View {
         HStack(alignment: .firstTextBaseline) {
           Text(shown.name).textStyle(.headline)
           Spacer(minLength: Space.s.points)
-          Tag(shown.manifest.totalBytes.formatted(.byteCount(style: .file)))
+          if let hosted = shown.downloadable {
+            Tag(hosted.manifest.totalBytes.formatted(.byteCount(style: .file)))
+          }
         }
         Text(shown.summary)
           .textStyle(.callout)

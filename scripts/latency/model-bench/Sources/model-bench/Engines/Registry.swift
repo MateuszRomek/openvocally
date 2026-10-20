@@ -11,10 +11,11 @@ let whisperStrategies: [any Strategy<WhisperModel>.Type] = [
 ]
 
 /// Each benchmarkable model with its loader and strategies.
-let benches: [ModelBench] = ModelID.allCases.map { model in
+let benches: [ModelBench] = ModelID.allCases.compactMap { model in
   switch model.engine {
   case .parakeet:
     ModelBench(model, strategies: parakeetStrategies, load: { try await ParakeetModel.load(model, from: $0) })
   case .whisper: ModelBench(model, strategies: whisperStrategies, load: WhisperModel.load)
+  case .apple: nil
   }
 }

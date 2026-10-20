@@ -12,11 +12,27 @@ public protocol Transcriber: Sendable {
   func keepWarm() async
   /// What the runtime may transcribe while the user is still recording, so the release reuses it.
   var lookahead: Lookahead { get }
+  /// A session that transcribes while the user records, so the release only finishes it. Nil for
+  /// an engine that transcribes whole recordings. Called at the press, so its setup overlaps the
+  /// recording. `transcribe(_:)` stays the fallback when the stream can't be used.
+  func openStream() async throws(TranscriptionError) -> (any TranscriptionStream)?
 }
 
 extension Transcriber {
   public func keepWarm() async {}
   public var lookahead: Lookahead { .off }
+  public func openStream() async throws(TranscriptionError) -> (any TranscriptionStream)? { nil }
+}
+
+/// One recording's streaming session: appends, then exactly one `finish` or `cancel`.
+public protocol TranscriptionStream: Sendable {
+  /// Appends 16 kHz samples that directly follow those already appended. Cheap and synchronous;
+  /// a failure surfaces at `finish`.
+  func append(_ samples: ArraySlice<Float>)
+  /// Appends the last samples, ends the input and returns the final text. `.noSpeech` when empty.
+  func finish(_ rest: ArraySlice<Float>) async throws(TranscriptionError) -> String
+  /// Ends the session without a result. Safe after `finish` and safe to call twice.
+  func cancel() async
 }
 
 /// What the runtime transcribes before the release.

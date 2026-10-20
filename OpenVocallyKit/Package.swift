@@ -86,7 +86,8 @@ let package = Package(
     .target(
       name: "ModelsTestSupport", dependencies: ["Models"], path: "Tests/ModelsTestSupport",
       swiftSettings: strict),
-    .testTarget(name: "ModelsTests", dependencies: ["Models", "ModelsTestSupport"], swiftSettings: strict),
+    .testTarget(
+      name: "ModelsTests", dependencies: ["Models", "ModelsTestSupport"], swiftSettings: strict),
     .testTarget(
       name: "TranscriptionTests",
       dependencies: ["Models", "ModelsTestSupport", "Transcription"],

@@ -21,7 +21,7 @@ steps=("$@")
 ((${#steps[@]})) || steps=(welcome permissions overlay shortcut model tryIt)
 out="$PWD/.build/onboarding-shots"
 mkdir -p "$out"
-app="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally.app"
+app="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally Dev.app"
 executable="$app/Contents/MacOS/OpenVocally"
 window_id="$PWD/.build/window-id"
 swiftc -O scripts/lib/window-id.swift -o "$window_id"
@@ -42,10 +42,10 @@ quit_app() {
 
 for step in "${steps[@]}"; do
   if [[ "$step" == "${steps[0]}" ]]; then
-    RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh -onboarding YES -onboardingStep "$step"
+    RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh -onboarding YES -onboardingStep "$step" -ApplePersistenceIgnoreState YES
   else
     quit_app
-    open -g "$app" --args -onboarding YES -onboardingStep "$step"
+    open -g "$app" --args -onboarding YES -onboardingStep "$step" -ApplePersistenceIgnoreState YES
   fi
   sleep 2.5
   pid="$(running | head -n 1)"

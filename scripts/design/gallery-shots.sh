@@ -21,10 +21,10 @@ if [[ "${DEBUG_APP_LOCK_HELD:-}" != 1 ]]; then
 fi
 
 sections=("$@")
-((${#sections[@]})) || sections=(type spacing radius color surface overlay components sidebar panels motion)
+((${#sections[@]})) || sections=(type spacing radius color surface overlay components sidebar panels motion language)
 out="$PWD/.build/design-gallery"
 mkdir -p "$out"
-app="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally.app"
+app="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally Dev.app"
 executable="$app/Contents/MacOS/OpenVocally"
 window_id="$PWD/.build/window-id"
 swiftc -O scripts/lib/window-id.swift -o "$window_id"
@@ -44,17 +44,19 @@ quit_app() {
 }
 
 # Launch Services can still list the quit copy for a moment and refuse the open with -600.
+# -ApplePersistenceIgnoreState: windows saved by a hand-run session would open instead of the gallery.
 open_section() {
   for _ in $(seq 1 10); do
-    open -g "$app" --args -designGallery YES -designGallerySection "$1" 2>/dev/null && return 0
+    open -g "$app" --args -designGallery YES -designGallerySection "$1" -ApplePersistenceIgnoreState YES 2>/dev/null && return 0
     sleep 0.5
   done
-  open -g "$app" --args -designGallery YES -designGallerySection "$1"
+  open -g "$app" --args -designGallery YES -designGallerySection "$1" -ApplePersistenceIgnoreState YES
 }
 
 for section in "${sections[@]}"; do
   if [[ "$section" == "${sections[0]}" ]]; then
-    RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh -designGallery YES -designGallerySection "$section"
+    RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh -designGallery YES -designGallerySection "$section" \
+      -ApplePersistenceIgnoreState YES
   else
     quit_app
     open_section "$section"

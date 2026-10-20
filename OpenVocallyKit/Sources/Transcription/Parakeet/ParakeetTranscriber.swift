@@ -17,7 +17,7 @@ public struct ParakeetTranscriber: Sendable {
     switch model {
     case .parakeetV3: (.v3, .parakeetV3)
     case .parakeetUltra: (.ultra, .parakeetUltra)
-    case .whisperTurbo: nil
+    case .whisperTurbo, .appleDictation, .appleSpeech: nil
     }
   }
 

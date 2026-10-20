@@ -90,7 +90,8 @@ import Testing
     #expect(library.runtime == .failed)
 
     log.fail(false)
-    library.redownload(.parakeetV3)
+    #expect(library.recovery(for: .parakeetV3) == .downloadAgain)
+    await library.recover(.parakeetV3)
     await eventually { library.runtime == .ready }
     #expect(library.runtime == .ready)
     #expect(library.installed == [.parakeetV3])

@@ -19,7 +19,7 @@ public enum Fixture {
     return ModelFile(path: path, size: Int64(data.count), sha256: digest)
   }
 
-  public static func manifest(_ model: ModelID) -> ModelManifest {
+  public static func manifest(_ model: DownloadableModel) -> ModelManifest {
     let files =
       model.isSingleFile ? [file("single.bin")] : [file("folder/a.bin"), file("folder/b.json")]
     return ModelManifest(repository: "test/\(model.rawValue)", revision: "abc", localPrefix: "", files: files)
@@ -32,7 +32,7 @@ public enum Fixture {
   }
 
   /// Writes a model straight into place, as a finished download leaves it.
-  public static func install(_ model: ModelID, in folder: ModelFolder) throws {
+  public static func install(_ model: DownloadableModel, in folder: ModelFolder) throws {
     let location = folder.location(of: model)
     for file in manifest(model).files {
       let url = model.isSingleFile ? location : location.appending(path: file.path)

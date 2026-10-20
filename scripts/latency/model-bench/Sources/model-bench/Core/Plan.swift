@@ -92,6 +92,7 @@ extension ModelID {
     switch engine {
     case .parakeet: ParakeetTranscriber.lookahead
     case .whisper: WhisperTranscriber.lookahead
+    case .apple: .off
     }
   }
 }

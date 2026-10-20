@@ -9,6 +9,7 @@ A Debug-only window that shows every design token and DesignSystem component in 
 - `gallery-components` buttons, status, tags, copy button, icon buttons and key caps.
 - `gallery-panels` panel layouts.
 - `gallery-motion` the named animations with Play buttons.
+- `gallery-language` the speech language control and picker: current language, search and the list in each state.
 
 ## How to get to it (user POV)
 
@@ -20,7 +21,7 @@ Preconditions:
 
 - Screen Recording for the screenshots.
 
-- **All sections.** Run `make gallery-shots`. It prints nine PNG paths.
+- **All sections.** Run `make gallery-shots`. It prints eleven PNG paths, one per section: type, spacing, radius, color, surface, overlay, components, sidebar, panels, motion and language.
 - **Some sections.** Run `scripts/design/gallery-shots.sh components panels`.
 - **Proof.** Open each `.build/design-gallery/<section>.png`. The window title reads `Design Gallery` and each column header names its appearance.
 

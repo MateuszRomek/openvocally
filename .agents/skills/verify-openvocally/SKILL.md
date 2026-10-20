@@ -5,7 +5,7 @@ description: Drive the real OpenVocally macOS Debug app and capture proof withou
 
 # Verify OpenVocally
 
-OpenVocally is a SwiftUI menu bar and window app for macOS 26 on Apple Silicon. Every check here runs the Debug build at `.build/DerivedData/Build/Products/Debug/OpenVocally.app` (bundle ID `com.openvocally.app.debug`). The scripts post no clicks or keys and never take focus. The user may be working on the same Mac, so never drive the app with synthetic input.
+OpenVocally is a SwiftUI menu bar and window app for macOS 26 on Apple Silicon. Every check here runs the Debug build at `.build/DerivedData/Build/Products/Debug/OpenVocally Dev.app` (bundle ID `com.openvocally.app.debug`). The scripts post no clicks or keys and never take focus. The user may be working on the same Mac, so never drive the app with synthetic input.
 
 There is one Debug app per checkout. All its builds share the bundle ID, preferences and Application Support folder, so two scripts cannot drive it at once. Every launch script holds `.build/debug-app.lock` through `scripts/with-debug-app.sh` and waits up to 900 s for the previous holder. Don't launch the app outside these scripts while another one runs.
 
@@ -20,6 +20,7 @@ Run this first, and again whenever a script fails in a way you don't understand:
 It is read-only. It prints whether the build exists and is current, the version, running Debug copies, the lock holder, the signing identity, the installed speech models and whether this terminal has Screen Recording. It exits 1 when the app is not built or another script holds the lock.
 
 - `signing: -` means the app is ad-hoc signed. macOS may then ask for Microphone and Accessibility again after each build. The harnesses below need neither, so they still run.
+- Build the Debug app only through `make build`, `scripts/build-debug.sh` or the launch scripts. They sign it with the local identity at build time. A plain `xcodebuild` leaves it ad hoc, and an ad hoc build under a running Debug app can make macOS revoke that app's right to post events. The app then removes its shortcut tap and Settings shows that Accessibility is needed.
 - `models: none` blocks the dictation harness. Ask the user to install a model in the app; don't download one yourself.
 - `screen recording: not granted` makes the screenshot scripts capture blank windows. Only the user can grant it.
 
