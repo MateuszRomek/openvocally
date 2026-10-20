@@ -21,7 +21,11 @@ import Overlay
   /// Launch. The overlay is made here rather than at init, because the model is built before the
   /// app finishes launching.
   func prepare() {
-    let overlay = OverlayHost()
+    #if DEBUG
+      let overlay = OverlayProbe.isRequested ? OverlayHost(pointer: { OverlayProbe.pointer }) : OverlayHost()
+    #else
+      let overlay = OverlayHost()
+    #endif
     overlay.prewarm()
     self.overlay = overlay
   }
@@ -97,6 +101,11 @@ import Overlay
     func runDemo() async {
       guard let overlay else { return }
       await OverlayDemo.run(overlay)
+    }
+
+    func runProbe() async {
+      guard let overlay else { return }
+      await OverlayProbe.run(overlay)
     }
   #endif
 }

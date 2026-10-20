@@ -45,6 +45,7 @@ The app has no automation API. It is driven by launch arguments, read in the Deb
 - `-designGallery YES -designGallerySection <section>` opens the Design Gallery on one section.
 - `-onboarding YES -onboardingStep <step>` opens onboarding on one step. `-modelFolder <dir>` swaps in an empty model folder.
 - `-overlayDemo YES -overlayStyle notch|island -overlayPlacement islandTop|islandBottom` loops the overlay through every state.
+- `-overlayProbe <file>` drives the overlay from a file a script rewrites, `<x> <y> <shown>`: the pointer in global screen points and 1 or 0. The overlay follows that pointer instead of the real cursor, so a script can aim at another display without moving the user's cursor. The log category is overlay-demo, and it logs `probe ready` once it reads the file.
 - `-diagnosticsExport <path>` writes the diagnostics file and quits. `-diagnosticsSecret <text>` first logs the text with default privacy, so the script can check the file leaves it out. `-diagnosticsSettings YES` shows Settings scrolled to the Support section without activating the app.
 - `-transcriptsHarness YES -seedTranscripts <rows> -harnessOutput <path>` seeds and times Transcripts. `scripts/latency/transcripts-latency.sh` builds it optimized and passes the rest.
 

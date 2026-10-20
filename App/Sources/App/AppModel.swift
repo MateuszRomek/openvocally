@@ -132,6 +132,10 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
         await feedback.runDemo()
         return
       }
+      if OverlayProbe.isRequested {
+        await feedback.runProbe()
+        return
+      }
       if DiagnosticsHarness.isRequested {
         await DiagnosticsHarness.run(self)
         return

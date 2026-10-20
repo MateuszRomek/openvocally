@@ -18,14 +18,22 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   private var observers: [any NSObjectProtocol] = []
   /// Exists only while a scene is shown, so the idle app runs no timer.
   private var follow: Task<Void, Never>?
+  private var check: Task<Void, Never>?
   /// Every finished `show` animation, superseded ones included, so a test can wait for a
   /// completion instead of a fixed time.
   private(set) var finishedAnimations = 0
   /// Read on each appearance, so a change in Settings applies without a restart.
   private let preference: @MainActor () -> OverlayPreference
+  /// The cursor in global screen points, swappable so a Debug harness can aim at a display
+  /// without moving the real cursor.
+  private let pointer: @MainActor () -> CGPoint
 
-  public init(preference: @escaping @MainActor () -> OverlayPreference = { .stored() }) {
+  public init(
+    preference: @escaping @MainActor () -> OverlayPreference = { .stored() },
+    pointer: @escaping @MainActor () -> CGPoint = { NSEvent.mouseLocation }
+  ) {
     self.preference = preference
+    self.pointer = pointer
   }
 
   /// Builds a panel for every display and draws a recording frame into each while
@@ -106,7 +114,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   private func present() {
     let screens = Self.screens()
     let found = Self.display(
-      containing: NSEvent.mouseLocation, in: screens.map { (id: $0.id, frame: $0.screen.frame) })
+      containing: pointer(), in: screens.map { (id: $0.id, frame: $0.screen.frame) })
     let target =
       screens.first { $0.id == found }
       ?? screens.first { $0.screen == NSScreen.main } ?? screens.first
@@ -123,6 +131,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     panel.place(on: target.screen, preference: preference())
     panel.panel.orderFrontRegardless()
     logger.notice("Overlay shown on display \(target.id, privacy: .public)")
+    checkVisible(on: target.id)
     startFollowing()
   }
 
@@ -152,6 +161,53 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   private func stopFollowing() {
     follow?.cancel()
     follow = nil
+    check?.cancel()
+    check = nil
+  }
+
+  /// A shown overlay the user cannot see leaves no trace in the log on its own. Once the island
+  /// has had time to appear, this records what the window server reports for the panel, and
+  /// the display of the cursor and of the focused window, so a diagnostics file can tell a
+  /// panel that never reached the screen from one shown away from where the user looked.
+  private func checkVisible(on id: CGDirectDisplayID) {
+    check?.cancel()
+    check = Task { [weak self] in
+      try? await Task.sleep(for: .milliseconds(500))
+      guard !Task.isCancelled, let self, self.active == id, let panel = self.panels[id]?.panel
+      else { return }
+      let screens = Self.screens()
+      let frames = screens.map { (id: $0.id, frame: $0.screen.frame) }
+      let panelDisplay = Self.display(
+        containing: CGPoint(x: panel.frame.midX, y: panel.frame.midY), in: frames)
+      let cursorDisplay = Self.display(containing: self.pointer(), in: frames)
+      let focusDisplay = Self.focusedWindowCentre().flatMap { Self.display(containing: $0, in: frames) }
+      logger.notice(
+        """
+        Overlay check on display \(id, privacy: .public): visible \(panel.isVisible, privacy: .public), \
+        unoccluded \(panel.occlusionState.contains(.visible), privacy: .public), \
+        panel display \(panelDisplay.map(String.init) ?? "none", privacy: .public), \
+        cursor display \(cursorDisplay.map(String.init) ?? "none", privacy: .public), \
+        focused window display \(focusDisplay.map(String.init) ?? "none", privacy: .public)
+        """)
+    }
+  }
+
+  /// The centre of the frontmost app's front window, in global screen points. Skips the
+  /// transparent strip a full-screen window keeps above itself.
+  private static func focusedWindowCentre() -> CGPoint? {
+    guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+      let windows = CGWindowListCopyWindowInfo(
+        [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
+      let primary = NSScreen.screens.first
+    else { return nil }
+    let front = windows.first {
+      ($0[kCGWindowOwnerPID as String] as? pid_t) == pid && ($0[kCGWindowLayer as String] as? Int) == 0
+        && ($0[kCGWindowAlpha as String] as? Double ?? 0) > 0
+    }
+    guard let bounds = front?[kCGWindowBounds as String] as? NSDictionary,
+      let rect = CGRect(dictionaryRepresentation: bounds)
+    else { return nil }
+    return CGPoint(x: rect.midX, y: primary.frame.maxY - rect.midY)
   }
 
   private func followCursor() {
@@ -159,7 +215,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     let screens = Self.screens()
     guard
       let to = Self.display(
-        containing: NSEvent.mouseLocation, in: screens.map { (id: $0.id, frame: $0.screen.frame) }),
+        containing: pointer(), in: screens.map { (id: $0.id, frame: $0.screen.frame) }),
       to != from, let screen = screens.first(where: { $0.id == to })?.screen
     else { return }
     handOff(from: from, to: to, on: screen)
@@ -170,6 +226,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     guard scene.level != .hidden, let panel = panels[to] else { return }
     let old = panels[from]
     logger.notice("Overlay moved to display \(to, privacy: .public)")
+    checkVisible(on: to)
     active = to
     generation += 1
     panel.model.scene = .hidden
