@@ -6,6 +6,18 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>OpenVocally</title>
         <item>
+            <title>1.0.4</title>
+            <pubDate>Tue, 20 Oct 2026 20:34:36 +0200</pubDate>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[- New speech models: Apple Dictation and Apple Speech, on macOS 26 or newer. macOS installs them on this Mac, and you choose the language in Models.
+- Fixed: the keyboard and mouse could stop responding when OpenVocally lost its Accessibility permission while it was running.
+]]></description>
+            <enclosure url="https://github.com/MateuszRomek/openvocally/releases/download/v1.0.4/OpenVocally-1.0.4.zip" length="11520499" type="application/octet-stream" sparkle:edSignature="CvvNyiPrlVvs7FOLfu/m4B093Rw1zs3/HPxoEeMlZOAkiUgTiEXx/Gg66G7QOv+PLAT3uxg8nR69g5kTXOwrBg=="/>
+        </item>
+        <item>
             <title>1.0.3</title>
             <pubDate>Tue, 20 Oct 2026 11:57:02 +0200</pubDate>
             <sparkle:version>4</sparkle:version>
@@ -63,6 +75,6 @@ Requires a Mac with Apple Silicon and macOS 15 or newer.
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: 4o3cSxH9kJEENPumtrfdNEwisE91ogjvGCHjXfuQKsP/OZi/JJuV8wIo5B7icXf6ASAkR+LEAas/9eMBqSnjCg==
-length: 4341
+edSignature: xsuWWu13mu7ufJEPRVpjewU9TBAVuKmj6Sspcch1yjMx86yyr1gmaxyes2yS4FM30/QR8bMVVG3tCPj8qgHLBw==
+length: 5386
 -->
