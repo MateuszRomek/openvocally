@@ -64,13 +64,14 @@ struct OnboardingView: View {
     }
     .onChange(of: connectivity.online) { _, online in
       guard online == true,
-        waitingForConnection || model.models.failures[ModelDownloadStatus.model] == .offline
+        waitingForConnection
+          || model.models.state(of: ModelDownloadStatus.model).failure == .download(.offline)
       else { return }
       waitingForConnection = false
-      model.models.startDownload(ModelDownloadStatus.model)
+      model.models.install(ModelDownloadStatus.model)
     }
-    .onChange(of: model.models.download == nil) { _, finished in
-      guard finished, model.models.installed.contains(ModelDownloadStatus.model) else { return }
+    .onChange(of: model.models.isInstalling) { _, installing in
+      guard !installing, model.models.installedModels.contains(ModelDownloadStatus.model) else { return }
       modelJustFinished = true
       Task {
         try? await Task.sleep(for: Self.readyHold)
@@ -88,7 +89,7 @@ struct OnboardingView: View {
   }
 
   private func retryDownload() {
-    model.models.startDownload(ModelDownloadStatus.model)
+    model.models.install(ModelDownloadStatus.model)
   }
 
   @ViewBuilder private var page: some View {
@@ -157,7 +158,7 @@ struct OnboardingView: View {
   /// Try it needs a model, so the model step waits for one. Offline or failed, Try later
   /// still finishes setup.
   private var waitingForModel: Bool {
-    step == .model && model.models.installed.isEmpty
+    step == .model && model.models.installedModels.isEmpty
   }
 
   private var primary: (title: String, action: () -> Void)? {
@@ -233,11 +234,11 @@ struct OnboardingView: View {
   /// Offline, it waits for a connection instead of starting a download that would fail.
   private func startModelDownloadIfNeeded() {
     let library = model.models
-    guard library.installed.isEmpty, library.download == nil else { return }
+    guard library.installedModels.isEmpty, !library.isInstalling else { return }
     if connectivity.online == false {
       waitingForConnection = true
     } else {
-      library.startDownload(ModelDownloadStatus.model)
+      library.install(ModelDownloadStatus.model)
     }
   }
 }

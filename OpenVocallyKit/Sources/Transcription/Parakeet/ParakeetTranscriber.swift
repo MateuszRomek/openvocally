@@ -12,30 +12,25 @@ public struct ParakeetTranscriber: Sendable {
   private let manager: AsrManager
   private let models: AsrModels
 
-  /// FluidAudio's version and repository for `model`. Only Parakeet models have them.
-  private static func fluidAudioModel(_ model: ModelID) -> (version: AsrModelVersion, repo: Repo)? {
-    switch model {
-    case .parakeetV3: (.v3, .parakeetV3)
-    case .parakeetUltra: (.ultra, .parakeetUltra)
-    case .whisperTurbo, .appleDictation, .appleSpeech: nil
+  private static func fluidAudioModel(_ variant: ParakeetVariant) -> (version: AsrModelVersion, repo: Repo) {
+    switch variant {
+    case .v3: (.v3, .parakeetV3)
+    case .ultra: (.ultra, .parakeetUltra)
     }
   }
 
   /// The folder inside the model's install folder that FluidAudio loads from.
-  static func repositoryFolder(of model: ModelID) -> String? {
-    fluidAudioModel(model)?.repo.folderName
+  static func repositoryFolder(of variant: ParakeetVariant) -> String {
+    fluidAudioModel(variant).repo.folderName
   }
 
-  /// Loads `model` from `modelDirectory`, the folder that contains its repository folder.
   /// Call it at launch, not on the first press. Any load can take about 30 s while CoreML
   /// compiles the model, so callers must show a loading state.
   @concurrent
-  public static func load(_ model: ModelID, modelDirectory: URL) async throws(TranscriptionError)
+  public static func load(_ variant: ParakeetVariant, modelDirectory: URL) async throws(TranscriptionError)
     -> ParakeetTranscriber
   {
-    guard let (version, repo) = fluidAudioModel(model) else {
-      preconditionFailure("\(model.name) is not a Parakeet model")
-    }
+    let (version, repo) = fluidAudioModel(variant)
     let repository = modelDirectory.appending(path: repo.folderName, directoryHint: .isDirectory)
     // loadLocal opens the components before it checks that the last one exists, so a missing
     // file behind a corrupt one would surface as a load failure instead of a missing model.

@@ -9,7 +9,7 @@ struct ModelSetupCard: View {
   let status: ModelDownloadStatus
 
   private var shown: ModelID {
-    library.installed.contains(library.active) ? library.active : .parakeetV3
+    library.installedModels.contains(library.active) ? library.active : .parakeetV3
   }
 
   var body: some View {
@@ -18,8 +18,8 @@ struct ModelSetupCard: View {
         HStack(alignment: .firstTextBaseline) {
           Text(shown.name).textStyle(.headline)
           Spacer(minLength: Space.s.points)
-          if let hosted = shown.downloadable {
-            Tag(hosted.manifest.totalBytes.formatted(.byteCount(style: .file)))
+          if let size = library.state(of: shown).downloadSize {
+            Tag(size.formatted(.byteCount(style: .file)))
           }
         }
         Text(shown.summary)
@@ -44,15 +44,15 @@ struct ModelSetupCard: View {
         .textStyle(.callout)
         .foregroundStyle(.secondary)
       } else {
-        ModelDownloadStatusLine(status: status) { library.startDownload(shown) }
+        ModelDownloadStatusLine(status: status) { library.install(shown) }
       }
-    } else if library.installed.contains(shown) {
+    } else if library.installedModels.contains(shown) {
       StatusRow(
         title: library.runtime == .ready ? "Ready" : "Getting ready",
         detail: library.runtime == .ready ? "Dictation works offline" : "Loading the model",
         status: library.runtime == .ready ? .ok : .progress)
     } else {
-      Button("Download") { library.startDownload(shown) }.appButton(size: .small)
+      Button("Download") { library.install(shown) }.appButton(size: .small)
     }
   }
 }

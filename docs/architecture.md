@@ -18,7 +18,7 @@ The code is split into a Swift package and a thin app target.
 | `Hotkeys` | The keyboard event tap, shortcut bindings, chords, one-key holds and double taps. |
 | `AudioCapture` | Opens the selected microphone, records 16 kHz mono audio, follows device changes, and publishes levels for the overlay. |
 | `Models` | The model catalog, pinned manifests and the downloader. |
-| `Transcription` | Loads the active model and runs the Parakeet and Whisper engines. |
+| `Transcription` | Installs and loads models, and runs the Parakeet, Whisper and Apple speech engines. |
 | `Paste` | Writes the transcript to the clipboard, posts Command-V, and restores the clipboard. |
 | `Dictation` | `DictationPipeline`, which connects the state machine to capture, transcription, paste and storage. |
 | `Overlay` | The recording indicator, shown as a notch or a floating island. |
@@ -68,14 +68,21 @@ The main actor runs SwiftUI, `AppModel`, the overlay and the settings. It reads 
 
 ## Speech models
 
-Three models ship in the catalog (`OpenVocallyKit/Sources/Models/ModelCatalog.swift`):
+Five models ship in the catalog (`OpenVocallyKit/Sources/Models/ModelCatalog.swift`):
 
 - Parakeet v3 and Parakeet Ultra run on Core ML through FluidAudio.
 - Whisper Turbo runs on whisper.cpp with Metal. `make whisper` builds whisper.cpp from a pinned commit with one patch from `scripts/whisper`.
+- Apple Dictation and Apple Speech run through SpeechAnalyzer on macOS 26 or newer. macOS installs their files, one set per language.
 
-The app downloads no model until the user picks one. `ModelDownloader` fetches each file from Hugging Face at a pinned revision into a hidden folder, checks its size and SHA-256 against `ModelManifests.swift`, and then moves the model into place. `scripts/models/pin-manifests.py` generates the manifests.
+`ModelID.provider` is the one switch from a model to where it comes from: `.hosted(HostedModel)` for the three models OpenVocally downloads, `.system(SystemModel)` for the two that macOS installs. Every other fact about a model, such as its engine, its install path and how it loads, derives from that value. A new model or engine fails the build at each switch that must handle it.
 
-`TranscriptionRuntime` loads the active model at launch and after a model change. It unloads the model after 20 idle minutes and loads it again at the next dictation.
+The app downloads no hosted model until the user picks one. `ModelDownloader` fetches each file from Hugging Face at a pinned revision into a hidden folder, checks its size and SHA-256 against `ModelManifests.swift`, and then moves the model into place. `scripts/models/pin-manifests.py` generates the manifests. `ModelFolder` is the only reader of a manifest, so tests swap in small ones by building a folder with them.
+
+`Provisioner` (`OpenVocallyKit/Sources/Transcription/Provisioner.swift`) checks, installs and removes both kinds. A system model needs a language before it can be checked or loaded. `ResolvedModel` holds a model together with that language, and it is what the runtime loads, so a system model without a language cannot reach the loader.
+
+`ModelLibrary` owns what the Models screen shows. It keeps one entry per model in `ModelStates`, and each entry runs at most one piece of work at a time: a check, an install or a removal. An entry's result is written only with the token its work was given, so a slow check cannot overwrite an install that finished after it started. Views read `state(of:)` and never ask which kind of model they show. After every change the library works out what the runtime should hold and applies it from one task, in order.
+
+`TranscriptionRuntime` loads the active model at launch and after a model change. It unloads the model after 20 idle minutes and loads it again at the next dictation. The dictation harness loads a model through `Provisioner.prepare` and the runtime alone, so it never starts `ModelLibrary` or changes the stored active model.
 
 ## Storage
 

@@ -42,8 +42,8 @@ struct TranscriptionRuntimeTests {
 
   @Test func `activating loads the model once`() async throws {
     let runtime = runtime()
-    await runtime.activate(.downloaded(.parakeetV3))
-    await runtime.activate(.downloaded(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
     #expect(try await runtime.transcribe([0]) == "text")
     #expect(log.loads == [.parakeetV3])
   }
@@ -57,7 +57,7 @@ struct TranscriptionRuntimeTests {
 
   @Test func `an idle model unloads and the next press loads it again`() async throws {
     let runtime = runtime()
-    await runtime.activate(.downloaded(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
     _ = try await runtime.transcribe([0])
     await eventually { clock.pending == 2 }
 
@@ -73,7 +73,7 @@ struct TranscriptionRuntimeTests {
   @Test func `a failed load is retried on the next dictation`() async throws {
     let runtime = runtime()
     log.fail(true)
-    await runtime.activate(.downloaded(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
     await #expect(throws: TranscriptionError.engineFailed) { try await runtime.transcribe([0]) }
 
     log.fail(false)
@@ -83,9 +83,9 @@ struct TranscriptionRuntimeTests {
 
   @Test func `switching models loads the new one`() async throws {
     let runtime = runtime()
-    await runtime.activate(.downloaded(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
     _ = try await runtime.transcribe([0])
-    await runtime.activate(.downloaded(.whisperTurbo))
+    await runtime.activate(.hosted(.whisperTurbo))
     _ = try await runtime.transcribe([0])
     #expect(log.loads == [.parakeetV3, .whisperTurbo])
   }
@@ -101,7 +101,7 @@ struct TranscriptionRuntimeShutDownTests {
         cancelled.withLock { $0 = Task.isCancelled }
         throw .modelNotInstalled
       })
-    await runtime.activate(.downloaded(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
     #expect(await runtime.isLoaded)
     await runtime.shutDown()
     await runtime.shutDown()
@@ -116,7 +116,7 @@ struct TranscriptionRuntimeShutDownTests {
     let runtime = TranscriptionRuntime(
       sleep: { await clock.sleep(for: $0) }, now: { clock.now },
       load: { (_) throws(TranscriptionError) in transcriber })
-    await runtime.activate(.downloaded(.whisperTurbo))
+    await runtime.activate(.hosted(.whisperTurbo))
     await clock.sleepers(atLeast: 1)
     let transcription = Task { try await runtime.transcribe([0]) }
     await transcriber.arrived.wait()
@@ -142,7 +142,7 @@ struct TranscriptionRuntimeShutDownTests {
         loadFinished.withLock { $0 = true }
         return FakeTranscriber()
       })
-    await runtime.activate(.downloaded(.whisperTurbo))
+    await runtime.activate(.hosted(.whisperTurbo))
     await eventually { gate.isWaiting }
     let shutDown = Task {
       await runtime.shutDown()
@@ -158,11 +158,11 @@ struct TranscriptionRuntimeShutDownTests {
     let clock = ManualClock()
     let runtime = TranscriptionRuntime(
       sleep: { await clock.sleep($0) }, load: { (model) throws(TranscriptionError) in try log.load(model) })
-    await runtime.activate(.downloaded(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
     await eventually { clock.pending == 1 }
     await runtime.shutDown()
     await runtime.warm()
-    await runtime.activate(.downloaded(.whisperTurbo))
+    await runtime.activate(.hosted(.whisperTurbo))
     await #expect(throws: TranscriptionError.cancelled) { try await runtime.transcribe([0]) }
     #expect(log.loads == [.parakeetV3])
     #expect(await runtime.isLoaded == false)
@@ -281,7 +281,7 @@ struct KeepWarmTests {
 
   @Test func `warming pings the model until the transcription`() async throws {
     let runtime = runtime()
-    await runtime.activate(.downloaded(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
     await runtime.warm()
     await clock.sleepers(atLeast: 2)
     await ping()
@@ -297,7 +297,7 @@ struct KeepWarmTests {
 
   @Test func `a transcription starts without waiting for the ping still running`() async throws {
     let runtime = runtime()
-    await runtime.activate(.downloaded(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
     pings.holdNextPing()
     await runtime.warm()
     await pings.holding.wait()
@@ -311,7 +311,7 @@ struct KeepWarmTests {
 
   @Test func `cooling down stops the pings`() async throws {
     let runtime = runtime()
-    await runtime.activate(.downloaded(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
     await runtime.warm()
     await clock.sleepers(atLeast: 2)
     #expect(pings.pings == 1)

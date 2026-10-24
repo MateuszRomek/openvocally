@@ -2,6 +2,7 @@ import AudioCapture
 import Diagnostics
 import Foundation
 import Hotkeys
+import Models
 import Overlay
 import SoundCues
 
@@ -15,11 +16,12 @@ extension AppModel {
     let settings = [
       DiagnosticsSetting("Speech model", models.active.rawValue),
       DiagnosticsSetting(
-        "Installed models", models.installed.map(\.rawValue).sorted().joined(separator: ", ")),
+        "Installed models", models.installedModels.map(\.rawValue).sorted().joined(separator: ", ")),
       DiagnosticsSetting("Model runtime", String(describing: models.runtime)),
       DiagnosticsSetting(
         "Download failures",
-        models.failures.map { "\($0.key.rawValue): \($0.value)" }.sorted().joined(separator: ", ")),
+        ModelID.allCases.compactMap { id in models.state(of: id).failure.map { "\(id.rawValue): \($0)" } }
+          .sorted().joined(separator: ", ")),
       DiagnosticsSetting("Microphone access", String(describing: input.access)),
       DiagnosticsSetting("Accessibility", shortcuts.accessibilityGranted ? "granted" : "not granted"),
       DiagnosticsSetting("Shortcuts", String(describing: shortcuts.availability)),

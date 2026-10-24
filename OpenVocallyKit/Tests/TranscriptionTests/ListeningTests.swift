@@ -1,3 +1,5 @@
+import Models
+import ModelsTestSupport
 import Synchronization
 import Testing
 
@@ -75,7 +77,7 @@ struct ListeningTests {
     let runtime = TranscriptionRuntime(
       sleep: { await clock.sleep(for: $0) }, now: { clock.now },
       load: { _ throws(TranscriptionError) in engine })
-    await runtime.activate(.downloaded(.parakeetV3))
+    await runtime.activate(.hosted(.parakeetV3))
     let recording = recording
     if listening {
       await runtime.warm(listening: { recording.soFar })

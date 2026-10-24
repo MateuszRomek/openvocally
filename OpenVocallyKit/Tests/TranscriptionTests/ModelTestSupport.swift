@@ -15,9 +15,9 @@ final class LoadLog: Sendable {
 
   func fail(_ failing: Bool) { state.withLock { $0.failing = failing } }
 
-  func load(_ loaded: RuntimeModel) throws(TranscriptionError) -> any Transcriber {
+  func load(_ loaded: ResolvedModel) throws(TranscriptionError) -> any Transcriber {
     let failing = state.withLock { state in
-      state.loads.append(loaded.model)
+      state.loads.append(loaded.id)
       return state.failing
     }
     if failing { throw .engineFailed }

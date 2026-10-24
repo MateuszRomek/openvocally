@@ -19,7 +19,7 @@ public enum Fixture {
     return ModelFile(path: path, size: Int64(data.count), sha256: digest)
   }
 
-  public static func manifest(_ model: DownloadableModel) -> ModelManifest {
+  public static func manifest(_ model: HostedModel) -> ModelManifest {
     let files =
       model.isSingleFile ? [file("single.bin")] : [file("folder/a.bin"), file("folder/b.json")]
     return ModelManifest(repository: "test/\(model.rawValue)", revision: "abc", localPrefix: "", files: files)
@@ -32,13 +32,26 @@ public enum Fixture {
   }
 
   /// Writes a model straight into place, as a finished download leaves it.
-  public static func install(_ model: DownloadableModel, in folder: ModelFolder) throws {
+  public static func install(_ model: HostedModel, in folder: ModelFolder) throws {
     let location = folder.location(of: model)
     for file in manifest(model).files {
       let url = model.isSingleFile ? location : location.appending(path: file.path)
       try FileManager.default.createDirectory(
         at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
       try #require(contents[file.path]).write(to: url)
+    }
+  }
+}
+
+extension HostedModel {
+  public static let parakeetV3 = hosted(.parakeetV3)
+  public static let parakeetUltra = hosted(.parakeetUltra)
+  public static let whisperTurbo = hosted(.whisperTurbo)
+
+  private static func hosted(_ id: ModelID) -> HostedModel {
+    switch id.provider {
+    case .hosted(let model): model
+    case .system: preconditionFailure("\(id.rawValue) is a system model")
     }
   }
 }
