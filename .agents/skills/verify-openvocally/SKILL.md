@@ -33,7 +33,7 @@ Each script builds the app, launches it in the background with the arguments its
 | Dictation end to end | `make dictation-harness` or `scripts/latency/dictation-harness.sh --runs 3` | `results.jsonl` ends with a `"summary":true` line |
 | Screens of one feature | `make gallery-shots`, `make onboarding-shots`, `scripts/latency/transcripts-latency.sh --screenshots` | the script prints each PNG path |
 | Idle health | `make smoke-idle` | the script prints the settle time and the CPU percentage |
-| Overlay over full-screen apps | `.agents/skills/verify-openvocally/overlay-fullscreen.sh` | the script prints `PASS` or `FAIL` |
+| Overlay over full-screen apps | `.agents/skills/verify-openvocally/overlay-fullscreen.sh` | the script prints `PASS`, `FAIL` or `NOT REPRODUCED` |
 | Diagnostics export | `make diagnostics-export` | the script prints `PASS`, the log scope line and the build time |
 | A manual look | `RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh <app arguments>` | `scripts/show-logs.sh app 2m` shows the launch |
 

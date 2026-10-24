@@ -24,7 +24,7 @@ Preconditions:
 - **Every state, still.** Run `scripts/design/gallery-shots.sh overlay`. Open `.build/design-gallery/overlay.png`. It shows each overlay state in light, dark and both Increase Contrast columns.
 - **Live loop.** Run `scripts/with-debug-app.sh env RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh -overlayDemo YES -overlayStyle island -overlayPlacement islandTop`. The overlay loops through every state. Run `scripts/show-logs.sh overlay-demo 2m`; it prints one line per state, such as `recording with meter`. Then run `.agents/skills/verify-openvocally/cleanup.sh`.
 - **During real dictation.** The dictation harness shows the real overlay for each run, and LB-01 is measured when it first shows recording.
-- **Full screen.** Run `.agents/skills/verify-openvocally/overlay-fullscreen.sh`. It strands the overlay panel the way closing a full-screen app does, then shows the overlay on another full-screen Space. It prints `PASS` when the log's check reads `unoccluded true`. Open `.build/overlay-fullscreen/shot.png`; it shows the overlay over an empty full-screen window. Run it after any change to the overlay panel's window or its lifecycle in `OverlayHost`.
+- **Full screen.** Run `.agents/skills/verify-openvocally/overlay-fullscreen.sh`. It closes a full-screen app while the overlay is hidden, then shows the overlay on another full-screen app's Space. It prints `PASS` (exit 0) when the log's check reads `unoccluded true` and `on active Space true`, `FAIL` (exit 1) when it doesn't, and `NOT REPRODUCED` (exit 2) when the full-screen sequence or the app didn't get ready, so the run proved nothing. Open `.build/overlay-fullscreen/shot.png`; it shows the overlay over an empty full-screen window. Run it after any change to how `OverlayHost` shows or hides its panels.
 - **Motion.** Run `scripts/design/gallery-shots.sh motion` for the list of named animations. Judging motion needs a recording or the user's eye; a still proves only that the entries exist.
 
 ## Gotchas
@@ -32,4 +32,4 @@ Preconditions:
 - `run-debug.sh` returns once the app is open, and the lock goes with it. Keep the live loop inside `scripts/with-debug-app.sh` and quit the app with the cleanup script before the next check.
 - On a Mac without a notch, the notch style falls back to the top island.
 - The full-screen check takes over the main display for about 25 s. Warn the user before running it.
-- On a full-screen Space, a log line with `unoccluded false` and `on active Space false` means the panel lost that Space. The app should log `replacing it` on the same press.
+- The overlay panels stay ordered in and hide at alpha 0. A panel ordered out while a full-screen Space closes loses every other full-screen Space until the app quits. On a full-screen Space, a check line with `unoccluded false` and `on active Space false` means a panel was ordered out somewhere.

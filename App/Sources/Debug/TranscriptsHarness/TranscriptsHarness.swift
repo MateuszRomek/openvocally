@@ -93,7 +93,7 @@
         ok = await drive(model, database)
       }
       let clean = await removeSaves(database)
-      if let window = NSApplication.shared.windows.first(where: { $0.isVisible && $0.frame.width >= 600 }) {
+      if let window = NSApplication.shared.windows.first(where: { $0.isVisible && $0.canBecomeMain && $0.frame.width >= 600 }) {
         record("window visible at end", window.occlusionState.contains(.visible) ? 1 : 0)
       }
       record("harness wall s", ScreenSignposts.milliseconds(ContinuousClock.now - started) / 1000)
@@ -206,7 +206,7 @@
     ) async -> Double? {
       let start = ContinuousClock.now
       guard await expect(shown, { model.screen = screen }) != nil else { return nil }
-      if let window = NSApplication.shared.windows.first(where: { $0.isVisible && $0.frame.width >= 600 }) {
+      if let window = NSApplication.shared.windows.first(where: { $0.isVisible && $0.canBecomeMain && $0.frame.width >= 600 }) {
         _ = await FrameClock.run(in: window) { _ in false }
       }
       return ScreenSignposts.milliseconds(ContinuousClock.now - start)
