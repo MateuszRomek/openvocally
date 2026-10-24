@@ -4,15 +4,19 @@ import Foundation
 /// cleanup of downloads that never finished.
 public struct ModelFolder: Sendable {
   public let root: URL
-  package let manifest: @Sendable (DownloadableModel) -> ModelManifest
+  let manifests: @Sendable (HostedModel) -> ModelManifest
 
   public init(root: URL) {
-    self.init(root: root) { $0.manifest }
+    self.init(root: root) { $0.pinned }
   }
 
-  init(root: URL, manifest: @escaping @Sendable (DownloadableModel) -> ModelManifest) {
+  init(root: URL, manifests: @escaping @Sendable (HostedModel) -> ModelManifest) {
     self.root = root
-    self.manifest = manifest
+    self.manifests = manifests
+  }
+
+  public func manifest(of model: HostedModel) -> ModelManifest {
+    manifests(model)
   }
 
   /// Keyed by bundle ID so Debug and Release keep separate models.
@@ -23,15 +27,15 @@ public struct ModelFolder: Sendable {
         .appending(path: "local-models", directoryHint: .isDirectory))
   }
 
-  public func location(of model: DownloadableModel) -> URL {
+  public func location(of model: HostedModel) -> URL {
     root.appending(path: model.installPath, directoryHint: model.isSingleFile ? .notDirectory : .isDirectory)
   }
 
   /// Complete only when every pinned file is there at its pinned size. Hashing on every
   /// launch would read gigabytes, so the SHA-256 is checked once, before the install.
-  public func isInstalled(_ model: DownloadableModel) -> Bool {
+  public func isInstalled(_ model: HostedModel) -> Bool {
     let location = location(of: model)
-    let manifest = manifest(model)
+    let manifest = manifest(of: model)
     return manifest.files.allSatisfy { file in
       let url = model.isSingleFile ? location : location.appending(path: manifest.localPath(for: file))
       let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? Int64
@@ -39,19 +43,15 @@ public struct ModelFolder: Sendable {
     }
   }
 
-  package func installedModels() -> Set<ModelID> {
-    Set(ModelID.downloadable.filter(isInstalled).map(\.id))
-  }
-
   /// The hidden folder a download fills before it is moved into place. It sits next to the
   /// final location, so the move is a rename on the same volume.
-  func stagingFolder(for model: DownloadableModel, at date: Date) -> URL {
+  func stagingFolder(for model: HostedModel, at date: Date) -> URL {
     let millis = Int64(date.timeIntervalSince1970 * 1000)
-    return root.appending(path: model.engine.rawValue, directoryHint: .isDirectory)
+    return root.appending(path: model.id.engine.rawValue, directoryHint: .isDirectory)
       .appending(path: ".\(model.rawValue)-\(millis).download", directoryHint: .isDirectory)
   }
 
-  public func delete(_ model: DownloadableModel) throws {
+  public func delete(_ model: HostedModel) throws {
     try FileManager.default.removeItem(at: location(of: model))
   }
 
@@ -61,7 +61,7 @@ public struct ModelFolder: Sendable {
   /// download still running in another copy of the app is left alone.
   package func sweepStaleDownloads(now: Date = .now) {
     let manager = FileManager.default
-    for engine in Set(ModelID.downloadable.map(\.engine)) {
+    for engine in Set(ModelID.hosted.map(\.id.engine)) {
       let folder = root.appending(path: engine.rawValue, directoryHint: .isDirectory)
       guard
         let entries = try? manager.contentsOfDirectory(

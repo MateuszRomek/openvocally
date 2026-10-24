@@ -2,4 +2,11 @@
 public enum SystemModel: String, Sendable, Hashable {
   case dictation
   case speech
+
+  public var id: ModelID {
+    switch self {
+    case .dictation: .appleDictation
+    case .speech: .appleSpeech
+    }
+  }
 }

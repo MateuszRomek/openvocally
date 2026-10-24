@@ -18,6 +18,20 @@
   /// recorded instead of posted. One JSON line per run and a summary line go to PATH, then the app
   /// quits. The hotkeys never start, so no Accessibility grant is needed, and no key event is
   /// posted.
+  /// Resumes a continuation with the first answer only.
+  @MainActor private final class FirstAnswer {
+    private var continuation: CheckedContinuation<Provisioner.Preparation?, Never>?
+
+    init(_ continuation: CheckedContinuation<Provisioner.Preparation?, Never>) {
+      self.continuation = continuation
+    }
+
+    func give(_ answer: Provisioner.Preparation?) {
+      continuation?.resume(returning: answer)
+      continuation = nil
+    }
+  }
+
   @MainActor enum DictationHarness {
     static var isRequested: Bool {
       UserDefaults.standard.string(forKey: "dictationHarness") != nil
@@ -37,8 +51,8 @@
     private static var terminalID = 0
 
     struct Parts {
-      let models: ModelLibrary
-      let folder: ModelFolder
+      let provisioner: Provisioner
+      let preferences: ModelPreferences
       let runtime: TranscriptionRuntime
       let history: History
       let feedback: DictationFeedback
@@ -86,16 +100,27 @@
       } catch {
         return (nil, .failed("scenario or fixture unreadable: \(error)"))
       }
-      if let model = scenario.model, let hosted = model.downloadable, !parts.folder.isInstalled(hosted) {
-        return (model, .skipped("\(model.rawValue) is not installed"))
+      var model = scenario.model ?? parts.preferences.active ?? .preferred
+      var prepared = await prepare(model, parts)
+      if scenario.model == nil, prepared == .notInstalled, let installed = await installedHosted(parts) {
+        (model, prepared) = installed
       }
-      let loaded =
-        if let model = scenario.model {
-          await load(model, in: parts.runtime, library: parts.models)
-        } else {
-          await waitForModel(parts.models)
-        }
-      if let failure = loaded { return (scenario.model ?? parts.models.active, .failed(failure)) }
+      switch prepared {
+      case nil:
+        return (model, .failed("\(model.rawValue) did not install within \(modelWait)"))
+      case .ready(let resolved):
+        if let failure = await load(resolved, in: parts.runtime) { return (model, .failed(failure)) }
+      case .notInstalled where scenario.model != nil:
+        return (model, .skipped("\(model.rawValue) is not installed"))
+      case .notInstalled:
+        return (model, .failed("\(model.rawValue) is not installed; download it in the app first"))
+      case .unavailable:
+        return (model, .skipped("\(model.rawValue) can't run on this Mac"))
+      case .needsLanguage:
+        return (model, .failed("\(model.rawValue) has no language; choose one in the app first"))
+      case .failed(let error):
+        return (model, .failed("\(model.rawValue) did not install: \(error)"))
+      }
       await parts.history.open()
       parts.feedback.prepare()
 
@@ -151,7 +176,7 @@
         append(result)
         try? await Task.sleep(for: gap)
       }
-      return (scenario.model ?? parts.models.active, .played)
+      return (model, .played)
     }
 
     private static func failure(of phase: DictationPhase) -> String? {
@@ -189,24 +214,39 @@
       }
     }
 
-    /// Loads `model` on the runtime alone, so the library's stored active model stays as it was.
-    private static func load(
-      _ model: ModelID, in runtime: TranscriptionRuntime, library: ModelLibrary
-    ) async -> String? {
-      if model.downloadable == nil { await library.start() }
-      // macOS installs speech assets per app. For a language macOS already has, the install only
-      // reserves it for this app, so the harness does it instead of skipping the model.
-      if model.downloadable == nil, !library.installed.contains(model) {
-        library.startDownload(model)
-        let deadline = ContinuousClock.now + modelWait
-        while library.download != nil, ContinuousClock.now < deadline {
-          try? await Task.sleep(for: .milliseconds(100))
+    /// Nil when installing a system model takes longer than `modelWait`. The install is cancelled
+    /// but not awaited, so an install that ignores the cancel can't hold the run.
+    private static func prepare(_ model: ModelID, _ parts: Parts) async -> Provisioner.Preparation? {
+      let provisioner = parts.provisioner
+      let preferences = parts.preferences
+      let work = Task { await provisioner.prepare(model, preferences: preferences) }
+      return await withCheckedContinuation { continuation in
+        let answer = FirstAnswer(continuation)
+        let deadline = Task {
+          try? await Task.sleep(for: modelWait)
+          work.cancel()
+          answer.give(nil)
+        }
+        Task {
+          answer.give(await work.value)
+          deadline.cancel()
         }
       }
-      guard let loaded = library.runtimeModel(for: model),
-        model.downloadable != nil || library.installed.contains(model)
-      else { return "\(model.rawValue) is not installed" }
-      await runtime.activate(loaded)
+    }
+
+    /// With no model named and the stored one missing, the first installed hosted model, as the
+    /// app itself falls back at launch. Hosted models only, since preparing one installs nothing.
+    private static func installedHosted(_ parts: Parts) async -> (ModelID, Provisioner.Preparation)? {
+      for model in [ModelID.preferred] + ModelID.allCases {
+        guard case .hosted = model.provider else { continue }
+        let prepared = await parts.provisioner.prepare(model, preferences: parts.preferences)
+        if case .ready = prepared { return (model, prepared) }
+      }
+      return nil
+    }
+
+    private static func load(_ model: ResolvedModel, in runtime: TranscriptionRuntime) async -> String? {
+      await runtime.activate(model)
       let state = await withTaskGroup(of: RuntimeState?.self) { group in
         group.addTask { await runtime.settled() }
         group.addTask {
@@ -217,26 +257,13 @@
         group.cancelAll()
         return first
       }
+      let name = model.id.rawValue
       switch state {
       case .ready: return nil
-      case .failed: return "\(model.rawValue) failed to load"
-      case .notInstalled, .loading: return "\(model.rawValue) did not load"
-      case nil: return "\(model.rawValue) did not load within \(modelWait)"
+      case .failed: return "\(name) failed to load"
+      case .notInstalled, .loading: return "\(name) did not load"
+      case nil: return "\(name) did not load within \(modelWait)"
       }
-    }
-
-    private static func waitForModel(_ models: ModelLibrary) async -> String? {
-      Task { await models.start() }
-      let deadline = ContinuousClock.now + modelWait
-      while ContinuousClock.now < deadline {
-        switch models.runtime {
-        case .ready: return nil
-        case .notInstalled: return "no speech model is installed; download one in the app first"
-        case .failed: return "the speech model failed to load"
-        case .loading: try? await Task.sleep(for: .milliseconds(100))
-        }
-      }
-      return "the speech model did not load within \(modelWait)"
     }
 
     private static func append(_ line: some Encodable) {

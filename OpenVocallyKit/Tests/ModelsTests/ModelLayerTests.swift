@@ -6,9 +6,9 @@ import Testing
 @testable import Models
 
 struct ModelCatalogTests {
-  @Test(arguments: ModelID.downloadable)
-  func `every pinned file has a size and a SHA-256`(model: DownloadableModel) {
-    let manifest = model.manifest
+  @Test(arguments: ModelID.hosted)
+  func `every pinned file has a size and a SHA-256`(model: HostedModel) {
+    let manifest = model.pinned
     #expect(!manifest.files.isEmpty)
     #expect(manifest.revision.count == 40)
     for file in manifest.files {
@@ -18,7 +18,7 @@ struct ModelCatalogTests {
   }
 
   @Test func `files download from the pinned revision`() {
-    let manifest = DownloadableModel.whisperTurbo.manifest
+    let manifest = HostedModel.whisperTurbo.pinned
     #expect(
       manifest.remoteURL(for: manifest.files[0]).absoluteString
         == "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-turbo.bin"
@@ -26,9 +26,23 @@ struct ModelCatalogTests {
   }
 
   @Test func `only models macOS installs have nothing to download`() {
-    #expect(ModelID.downloadable.map(\.id) == [.parakeetV3, .parakeetUltra, .whisperTurbo])
-    #expect(ModelID.appleDictation.downloadable == nil)
-    #expect(ModelID.appleSpeech.downloadable == nil)
+    #expect(ModelID.hosted.map(\.id) == [.parakeetV3, .parakeetUltra, .whisperTurbo])
+  }
+
+  @Test(arguments: ModelID.allCases)
+  func `every model round-trips through its provider`(model: ModelID) {
+    switch model.provider {
+    case .hosted(let hosted): #expect(hosted.id == model)
+    case .system(let system): #expect(system.id == model)
+    }
+  }
+
+  @Test func `model IDs keep their stored raw values`() {
+    #expect(
+      ModelID.allCases.map(\.rawValue) == [
+        "parakeet-tdt-0.6b-v3-coreml", "parakeet-ultra-coreml", "large-v3-turbo",
+        "apple-dictation-transcriber", "apple-speech-transcriber",
+      ])
   }
 
   @Test func `models install under the bundle ID local-models folder`() {
@@ -50,12 +64,14 @@ struct ModelFolderTests {
     #expect(!folder.isInstalled(.parakeetV3))
     try Fixture.install(.parakeetV3, in: folder)
     try Fixture.install(.whisperTurbo, in: folder)
-    #expect(folder.installedModels() == [.parakeetV3, .whisperTurbo])
+    #expect(folder.isInstalled(.parakeetV3))
+    #expect(folder.isInstalled(.whisperTurbo))
+    #expect(!folder.isInstalled(.parakeetUltra))
 
     try Data("alph".utf8).write(to: folder.location(of: .parakeetV3).appending(path: "folder/a.bin"))
     #expect(!folder.isInstalled(.parakeetV3))
     try FileManager.default.removeItem(at: folder.location(of: .whisperTurbo))
-    #expect(folder.installedModels().isEmpty)
+    #expect(!folder.isInstalled(.whisperTurbo))
   }
 
   @Test func `the sweep removes downloads an hour old and keeps newer ones`() throws {
@@ -90,8 +106,8 @@ struct ModelDownloaderTests {
     }
   }
 
-  @Test(arguments: [DownloadableModel.parakeetV3, .parakeetUltra, .whisperTurbo])
-  func `a verified download is installed and the staging folder is gone`(model: DownloadableModel)
+  @Test(arguments: [HostedModel.parakeetV3, .parakeetUltra, .whisperTurbo])
+  func `a verified download is installed and the staging folder is gone`(model: HostedModel)
     async throws
   {
     defer { try? FileManager.default.removeItem(at: folder.root) }

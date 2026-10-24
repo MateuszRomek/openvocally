@@ -1,3 +1,4 @@
+import Models
 import Transcription
 
 /// One way to turn a recording into text. The feeder calls `start` once per run, `append` for each
@@ -84,8 +85,7 @@ actor ShippingStrategy<Model: WholeBufferTranscriber>: Strategy {
     let engine = CountingTranscriber(engine)
     self.engine = engine
     runtime = TranscriptionRuntime { _ in engine }
-    // Any installed model id works: the loader above ignores it and returns the loaded engine.
-    await runtime.activate(.downloaded(.preferred))
+    if case .hosted(let model) = ModelID.preferred.provider { await runtime.activate(.hosted(model)) }
   }
 
   func start() async {

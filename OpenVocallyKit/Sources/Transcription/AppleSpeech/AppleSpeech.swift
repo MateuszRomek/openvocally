@@ -3,9 +3,9 @@ import Models
 
 /// The only way into the Speech framework from shared code, so macOS 15 never reaches it.
 public enum AppleSpeech {
-  /// Nil before macOS 26, which has no SpeechAnalyzer.
-  public static func store() -> (any SystemModelStore)? {
-    guard #available(macOS 26, *) else { return nil }
+  /// No models before macOS 26, which has no SpeechAnalyzer.
+  public static func store() -> any SystemModelStore {
+    guard #available(macOS 26, *) else { return NoSystemModels() }
     return AppleSpeechAssets()
   }
 

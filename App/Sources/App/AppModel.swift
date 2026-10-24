@@ -54,7 +54,8 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
   @ObservationIgnored private var shutdown: Task<Void, Never>?
 
   @ObservationIgnored private let transcription: TranscriptionRuntime
-  @ObservationIgnored private let modelFolder: ModelFolder
+  @ObservationIgnored private let provisioner: Provisioner
+  @ObservationIgnored private let preferences: ModelPreferences
 
   init(extensions: AppExtensions) {
     self.extensions = extensions
@@ -66,12 +67,13 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
         folder = ModelFolder(root: URL(filePath: path, directoryHint: .isDirectory))
       }
     #endif
-    modelFolder = folder
     let transcription = TranscriptionRuntime.live(folder: folder)
     self.transcription = transcription
-    let downloader = ModelDownloader(folder: folder, fetcher: URLSessionFetcher())
-    models = ModelLibrary(
-      folder: folder, downloader: downloader, runtime: transcription, systemModels: AppleSpeech.store())
+    let provisioner = Provisioner(folder: folder, fetcher: URLSessionFetcher(), system: AppleSpeech.store())
+    self.provisioner = provisioner
+    let preferences = ModelPreferences(defaults: .standard)
+    self.preferences = preferences
+    models = ModelLibrary(provisioner: provisioner, runtime: transcription, preferences: preferences)
     let history = History()
     self.history = history
     shortcuts = Shortcuts(history: history, promptsForAccessibility: !Onboarding.neededAtLaunch)
@@ -104,7 +106,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
       if DictationHarness.isRequested {
         await DictationHarness.run(
           .init(
-            models: models, folder: modelFolder, runtime: transcription, history: history,
+            provisioner: provisioner, preferences: preferences, runtime: transcription, history: history,
             feedback: feedback, capture: input.capture))
         return
       }

@@ -3,15 +3,14 @@ import Models
 
 /// What the runtime loads. A system model's language is part of it, so choosing another language
 /// is a different value and `activate` reloads.
-public enum RuntimeModel: Hashable, Sendable {
-  case downloaded(ModelID)
+public enum ResolvedModel: Hashable, Sendable {
+  case hosted(HostedModel)
   case system(SystemModel, Locale)
 
-  public var model: ModelID {
+  public var id: ModelID {
     switch self {
-    case .downloaded(let model): model
-    case .system(.dictation, _): .appleDictation
-    case .system(.speech, _): .appleSpeech
+    case .hosted(let model): model.id
+    case .system(let model, _): model.id
     }
   }
 }

@@ -19,11 +19,12 @@ enum ModelDownloadStatus: Equatable {
   /// `online`: the network path, nil before the first reading. A transport error while the
   /// Mac is online, such as a timeout, is a failure with Try Again, not "offline".
   @MainActor init(library: ModelLibrary, waiting: Bool, justFinished: Bool, online: Bool?) {
-    if let download = library.download, download.model == Self.model {
-      self = .downloading(fraction: download.fraction)
-    } else if waiting || (library.failures[Self.model] == .offline && online == false) {
+    let state = library.state(of: Self.model)
+    if case .installing(let progress) = state.readiness {
+      self = .downloading(fraction: progress.fraction)
+    } else if waiting || (state.failure == .download(.offline) && online == false) {
       self = .offline
-    } else if library.failures[Self.model] != nil {
+    } else if state.failure != nil {
       self = .failed
     } else if justFinished {
       self = .ready

@@ -10,13 +10,11 @@ struct LanguageControl: View {
   let model: ModelID
 
   var body: some View {
-    LanguagePicker(
-      languages: library.languages(of: model), chosen: library.locale(of: model)
-    ) { locale in
+    let language = library.state(of: model).language
+    LanguagePicker(languages: language?.supported ?? [], chosen: language?.chosen) { locale in
       Task { await library.chooseLanguage(locale, for: model) }
     }
-    // The install is for the language shown, so it can't change until the install ends.
-    .disabled(library.download?.model == model)
+    .disabled(language?.canChange == false)
   }
 }
 
@@ -119,13 +117,13 @@ struct LanguagePopover: View {
   }
 }
 
-extension DownloadError {
-  var systemMessage: String {
+extension SystemInstallError {
+  var message: String {
     switch self {
-    case .busy: "Another model is downloading. Finish or cancel it first."
     case .cancelled: "The download was cancelled."
     case .offline: "Couldn't reach Apple. Check your connection and try again."
-    case .server, .corrupted, .fileSystem: "macOS couldn't install the speech files. Try again later."
+    case .failed: "macOS couldn't install the speech files. Try again later."
+    case .unavailable: "This Mac can't run Apple's speech models."
     case .diskFull: "Not enough disk space. Free up some space and try again."
     case .reservationLimit:
       "macOS keeps speech files for only a few languages per app. Choose a language the other Apple model uses, or try again later."

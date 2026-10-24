@@ -13,8 +13,6 @@ public enum DownloadError: Error, Equatable, Sendable {
   case corrupted
   case diskFull
   case fileSystem
-  /// macOS keeps speech files for a limited number of languages per app, and every one is taken.
-  case reservationLimit
 }
 
 public enum DownloadProgress: Sendable, Equatable {
@@ -22,6 +20,12 @@ public enum DownloadProgress: Sendable, Equatable {
   /// Downloading, with no size yet to measure the download against.
   case indeterminate
   case verifying
+
+  /// 0 to 1, or nil while the size is unknown or the files are verifying.
+  public var fraction: Double? {
+    guard case .downloading(let received, let total) = self, total > 0 else { return nil }
+    return Double(received) / Double(total)
+  }
 }
 
 /// Fetches one URL to a file. Tests swap in a fake; the app uses `URLSessionFetcher`.
@@ -39,7 +43,7 @@ public actor ModelDownloader {
   private let folder: ModelFolder
   private let fetcher: any ModelFetching
   private let now: @Sendable () -> Date
-  private var active: DownloadableModel?
+  private var active: HostedModel?
 
   public init(folder: ModelFolder, fetcher: any ModelFetching, now: @escaping @Sendable () -> Date = { .now })
   {
@@ -52,7 +56,7 @@ public actor ModelDownloader {
   /// `replacing` downloads a model that is already installed, such as one that won't load, and
   /// swaps it in only after the new files pass verification.
   package func install(
-    _ model: DownloadableModel, replacing: Bool = false,
+    _ model: HostedModel, replacing: Bool = false,
     progress: @escaping @Sendable (DownloadProgress) -> Void
   ) async throws(DownloadError) {
     do {
@@ -66,7 +70,7 @@ public actor ModelDownloader {
   }
 
   private func fetchAndInstall(
-    _ model: DownloadableModel, replacing: Bool, progress: @escaping @Sendable (DownloadProgress) -> Void
+    _ model: HostedModel, replacing: Bool, progress: @escaping @Sendable (DownloadProgress) -> Void
   ) async throws(DownloadError) {
     guard active == nil else { throw .busy }
     active = model
@@ -75,7 +79,7 @@ public actor ModelDownloader {
 
     let staging = folder.stagingFolder(for: model, at: now())
     defer { try? FileManager.default.removeItem(at: staging) }
-    let manifest = folder.manifest(model)
+    let manifest = folder.manifest(of: model)
     let total = manifest.totalBytes
     logger.notice(
       "Model download started: \(model.rawValue, privacy: .public), \(total, privacy: .public) bytes, replacing: \(replacing, privacy: .public)"
@@ -109,7 +113,7 @@ public actor ModelDownloader {
     logger.notice("Model installed: \(model.rawValue, privacy: .public)")
   }
 
-  private func moveIntoPlace(_ model: DownloadableModel, from source: URL) throws(DownloadError) {
+  private func moveIntoPlace(_ model: HostedModel, from source: URL) throws(DownloadError) {
     let manager = FileManager.default
     let location = folder.location(of: model)
     do {

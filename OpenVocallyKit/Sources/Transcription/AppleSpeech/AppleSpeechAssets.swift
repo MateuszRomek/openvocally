@@ -24,7 +24,7 @@ struct AppleSpeechAssets: SystemModelStore {
 
   func install(
     _ model: SystemModel, locale: Locale, progress: @escaping @Sendable (DownloadProgress) -> Void
-  ) async throws(DownloadError) {
+  ) async throws(SystemInstallError) {
     let module = SpeechModuleSession(model, locale: locale).module
     try await Self.reserve(locale)
     do {
@@ -57,7 +57,7 @@ struct AppleSpeechAssets: SystemModelStore {
       transcriptionLogger.notice(
         "Speech assets install ended: \(model.rawValue, privacy: .public), \(String(describing: error), privacy: .public)"
       )
-      throw Self.downloadError(error)
+      throw Task.isCancelled ? .cancelled : Self.installError(error)
     }
   }
 
@@ -67,7 +67,7 @@ struct AppleSpeechAssets: SystemModelStore {
 
   /// A reservation counts against `maximumReservedLocales`, so a full set is reported as such
   /// rather than as a failed install.
-  private static func reserve(_ locale: Locale) async throws(DownloadError) {
+  private static func reserve(_ locale: Locale) async throws(SystemInstallError) {
     let reserved = await AssetInventory.reservedLocales
     guard !reserved.contains(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) }) else { return }
     guard reserved.count < AssetInventory.maximumReservedLocales else { throw .reservationLimit }
@@ -78,13 +78,20 @@ struct AppleSpeechAssets: SystemModelStore {
         "Speech locale not reserved: \(locale.identifier, privacy: .public), \(String(describing: error), privacy: .public)"
       )
       throw await AssetInventory.reservedLocales.count >= AssetInventory.maximumReservedLocales
-        ? .reservationLimit : downloadError(error)
+        ? .reservationLimit : installError(error)
     }
   }
 
-  static func downloadError(_ error: any Error) -> DownloadError {
+  /// AssetInventory's error domains and codes are undocumented, so an unmapped one is logged
+  /// publicly (a code is not user content) for someone to give it a case.
+  static func installError(_ error: any Error) -> SystemInstallError {
     if error is CancellationError || Task.isCancelled { return .cancelled }
-    if (error as NSError).domain == NSURLErrorDomain { return .offline }
-    return .fileSystem
+    let error = error as NSError
+    if error.domain == NSURLErrorDomain { return .offline }
+    if error.domain == NSCocoaErrorDomain, error.code == NSFileWriteOutOfSpaceError { return .diskFull }
+    if error.domain == NSPOSIXErrorDomain, error.code == Int(ENOSPC) { return .diskFull }
+    transcriptionLogger.notice(
+      "Speech assets error unmapped: \(error.domain, privacy: .public) \(error.code, privacy: .public)")
+    return .failed(domain: error.domain, code: error.code)
   }
 }

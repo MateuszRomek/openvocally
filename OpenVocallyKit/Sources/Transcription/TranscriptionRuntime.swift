@@ -14,7 +14,7 @@ public enum RuntimeState: Sendable, Equatable {
 /// Keeps the active model loaded. It loads at launch and after a model change, unloads
 /// after 20 idle minutes, and loads again when the next dictation starts.
 public actor TranscriptionRuntime {
-  public typealias Loader = @Sendable (RuntimeModel) async throws(TranscriptionError) -> any Transcriber
+  public typealias Loader = @Sendable (ResolvedModel) async throws(TranscriptionError) -> any Transcriber
   public typealias Load = Task<Result<any Transcriber, TranscriptionError>, Never>
   /// The 16 kHz recording so far, each sample as the final recording will have it, or nil once
   /// the recording ended.
@@ -47,7 +47,7 @@ public actor TranscriptionRuntime {
   private let sleep: @Sendable (Duration) async -> Void
   private let now: @Sendable () -> ContinuousClock.Instant
 
-  private var model: RuntimeModel?
+  private var model: ResolvedModel?
   private var loaded: Load?
   private var inUse = 0
   private var idleTimer: Task<Void, Never>?
@@ -82,18 +82,19 @@ public actor TranscriptionRuntime {
     AppLogger.minimumLevel = .warning
     return TranscriptionRuntime { (loaded) throws(TranscriptionError) in
       switch loaded {
-      case .downloaded(let model):
-        guard let hosted = model.downloadable else { throw .modelNotInstalled }
-        return model.engine == .whisper
-          ? try await WhisperTranscriber.load(modelFile: folder.location(of: hosted))
-          : try await ParakeetTranscriber.load(model, modelDirectory: folder.location(of: hosted))
+      case .hosted(let model):
+        switch model.engine {
+        case .parakeet(let variant):
+          return try await ParakeetTranscriber.load(variant, modelDirectory: folder.location(of: model))
+        case .whisper: return try await WhisperTranscriber.load(modelFile: folder.location(of: model))
+        }
       case .system(let model, let locale): return try await AppleSpeech.load(model, locale: locale)
       }
     }
   }
 
   /// Switches to `model` and starts loading it. `nil` means no model is installed.
-  public func activate(_ model: RuntimeModel?) {
+  public func activate(_ model: ResolvedModel?) {
     guard !isShutDown, model != self.model || loaded == nil else { return }
     loaded?.cancel()
     loaded = nil

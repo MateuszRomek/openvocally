@@ -8,10 +8,10 @@ import Transcription
 struct ParakeetModel: WholeBufferTranscriber {
   let transcriber: ParakeetTranscriber
 
-  static func load(_ model: ModelID, from location: URL) async throws -> ParakeetModel {
+  static func load(_ variant: ParakeetVariant, from location: URL) async throws -> ParakeetModel {
     // FluidAudio can log transcript text; the app sets the same level before its first load.
     AppLogger.minimumLevel = .warning
-    return ParakeetModel(transcriber: try await ParakeetTranscriber.load(model, modelDirectory: location))
+    return ParakeetModel(transcriber: try await ParakeetTranscriber.load(variant, modelDirectory: location))
   }
 
   var engine: any Transcriber { transcriber }
