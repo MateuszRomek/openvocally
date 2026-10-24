@@ -122,7 +122,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
       logger.notice("Overlay skipped: no display")
       return
     }
-    guard let panel = panels[target.id] else {
+    guard var panel = panels[target.id] else {
       logger.notice("Overlay skipped: no panel for display \(target.id, privacy: .public)")
       return
     }
@@ -130,9 +130,26 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     active = target.id
     panel.place(on: target.screen, preference: preference())
     panel.panel.orderFrontRegardless()
+    if !panel.panel.isOnActiveSpace {
+      panel = replacePanel(target.id, on: target.screen)
+    }
     logger.notice("Overlay shown on display \(target.id, privacy: .public)")
     checkVisible(on: target.id)
     startFollowing()
+  }
+
+  /// When a full-screen Space closes while a panel is ordered out, the window server drops the
+  /// panel from every other full-screen Space despite `canJoinAllSpaces`, and resetting
+  /// `collectionBehavior` does not bring it back. A new window joins them all again. Costs one
+  /// unwarmed first draw, on a press that would otherwise show nothing.
+  private func replacePanel(_ id: CGDirectDisplayID, on screen: NSScreen) -> ScreenPanel {
+    logger.error("Overlay panel off the active Space on display \(id, privacy: .public), replacing it")
+    panels[id]?.panel.orderOut(nil)
+    let panel = ScreenPanel(bars: bars)
+    panels[id] = panel
+    panel.place(on: screen, preference: preference())
+    panel.panel.orderFrontRegardless()
+    return panel
   }
 
   /// The display whose frame holds `point`. Edges follow `NSMouseInRect` for unflipped
@@ -185,6 +202,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
         """
         Overlay check on display \(id, privacy: .public): visible \(panel.isVisible, privacy: .public), \
         unoccluded \(panel.occlusionState.contains(.visible), privacy: .public), \
+        on active Space \(panel.isOnActiveSpace, privacy: .public), \
         panel display \(panelDisplay.map(String.init) ?? "none", privacy: .public), \
         cursor display \(cursorDisplay.map(String.init) ?? "none", privacy: .public), \
         focused window display \(focusDisplay.map(String.init) ?? "none", privacy: .public)
