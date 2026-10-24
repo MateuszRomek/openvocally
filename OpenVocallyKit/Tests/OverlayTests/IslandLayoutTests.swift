@@ -89,7 +89,7 @@ import Testing
   }
 
   @Test(.enabled { await Self.animatesOnScreen })
-  func `a press during the hide keeps the panel and a plain hide orders it out`() async throws {
+  func `a press during the hide keeps the panel and a plain hide hides it`() async throws {
     _ = NSApplication.shared
     let recording = try IslandLayoutTests.dictation(.recording(.pushToTalk))
     let host = OverlayHost(preference: { OverlayPreference(style: .island, edge: .bottom) })
@@ -102,6 +102,23 @@ import Testing
     #expect(host.visiblePanel != nil)
     host.show(nil, from: .dictation)
     #expect(try await Self.eventually { host.visiblePanel == nil })
+  }
+
+  /// A panel ordered out while a full-screen Space closes loses every other full-screen Space,
+  /// so hiding must keep it ordered in, through an app hide too.
+  @Test(.enabled { await Self.animatesOnScreen })
+  func `a hidden panel stays ordered in at alpha 0`() async throws {
+    _ = NSApplication.shared
+    let recording = try IslandLayoutTests.dictation(.recording(.pushToTalk))
+    let host = OverlayHost(preference: { OverlayPreference(style: .island, edge: .bottom) })
+    host.prewarm()
+    host.show(recording, from: .dictation)
+    let panel = try #require(host.visiblePanel)
+    host.show(nil, from: .dictation)
+    #expect(try await Self.eventually { host.visiblePanel == nil })
+    #expect(panel.isVisible)
+    #expect(panel.alphaValue == 0)
+    #expect(!panel.canHide)
   }
 
   @Test(.enabled { await Self.animatesOnScreen })

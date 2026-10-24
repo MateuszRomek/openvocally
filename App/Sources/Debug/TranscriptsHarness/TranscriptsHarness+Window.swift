@@ -125,7 +125,9 @@
     static func mainWindow(_ model: AppModel) async -> NSWindow? {
       for _ in 0..<100 {
         if model.windowOpener != nil,
-          let window = NSApplication.shared.windows.first(where: { $0.isVisible && $0.frame.width >= 600 })
+          let window = NSApplication.shared.windows.first(where: {
+            $0.isVisible && $0.canBecomeMain && $0.frame.width >= 600
+          })
         {
           // The same screen and size every run: frame rates differ between displays, and the
           // window's size sets how many rows are on screen and how many columns Home lays out.

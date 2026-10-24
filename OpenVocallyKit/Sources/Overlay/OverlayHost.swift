@@ -78,7 +78,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
       guard let self else { return }
       self.finishedAnimations += 1
       guard self.generation == current else { return }
-      self.orderOutHidden()
+      self.hideInactive()
     }
     panel.draw()
   }
@@ -126,10 +126,10 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
       logger.notice("Overlay skipped: no panel for display \(target.id, privacy: .public)")
       return
     }
-    if let active, active != target.id { panels[active]?.panel.orderOut(nil) }
+    if let active, active != target.id { panels[active]?.hide() }
     active = target.id
     panel.place(on: target.screen, preference: preference())
-    panel.panel.orderFrontRegardless()
+    panel.reveal()
     logger.notice("Overlay shown on display \(target.id, privacy: .public)")
     checkVisible(on: target.id)
     startFollowing()
@@ -173,8 +173,9 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     check?.cancel()
     check = Task { [weak self] in
       try? await Task.sleep(for: .milliseconds(500))
-      guard !Task.isCancelled, let self, self.active == id, let panel = self.panels[id]?.panel
+      guard !Task.isCancelled, let self, self.active == id, let screenPanel = self.panels[id]
       else { return }
+      let panel = screenPanel.panel
       let screens = Self.screens()
       let frames = screens.map { (id: $0.id, frame: $0.screen.frame) }
       let panelDisplay = Self.display(
@@ -183,8 +184,9 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
       let focusDisplay = Self.focusedWindowCentre().flatMap { Self.display(containing: $0, in: frames) }
       logger.notice(
         """
-        Overlay check on display \(id, privacy: .public): visible \(panel.isVisible, privacy: .public), \
+        Overlay check on display \(id, privacy: .public): visible \(screenPanel.isShown, privacy: .public), \
         unoccluded \(panel.occlusionState.contains(.visible), privacy: .public), \
+        on active Space \(panel.isOnActiveSpace, privacy: .public), \
         panel display \(panelDisplay.map(String.init) ?? "none", privacy: .public), \
         cursor display \(cursorDisplay.map(String.init) ?? "none", privacy: .public), \
         focused window display \(focusDisplay.map(String.init) ?? "none", privacy: .public)
@@ -232,13 +234,13 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     panel.model.scene = .hidden
     panel.place(on: screen, preference: preference())
     panel.draw()
-    panel.panel.orderFrontRegardless()
+    panel.reveal()
     let reduce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     guard !reduce else {
       panel.model.scene = scene
       panel.draw()
       old?.model.scene = .hidden
-      old?.panel.orderOut(nil)
+      old?.hide()
       return
     }
     withAnimation(OverlayScene.motion(from: .hidden, to: scene).resolved(reduceMotion: false)) {
@@ -254,14 +256,14 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     } completion: { [weak self] in
       // The cursor may have come back while the old island was leaving.
       guard let self, self.active != from else { return }
-      old.panel.orderOut(nil)
+      old.hide()
     }
   }
 
-  private func orderOutHidden() {
+  private func hideInactive() {
     let hidden = OverlayScene(slots).level == .hidden
     for (id, panel) in panels where hidden || id != active {
-      panel.panel.orderOut(nil)
+      panel.hide()
     }
   }
 
@@ -271,6 +273,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     let screens = Self.screens()
     let ids = Set(screens.map(\.id))
     for (id, panel) in panels where !ids.contains(id) {
+      // The only orderOut: this panel is dropped at once. Any other panel hides with `hide()`.
       panel.panel.orderOut(nil)
       panels[id] = nil
     }
@@ -315,7 +318,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   }
 
   var visiblePanel: NSPanel? {
-    activePanel.flatMap { $0.panel.isVisible ? $0.panel : nil }
+    activePanel.flatMap { $0.isShown ? $0.panel : nil }
   }
 }
 
@@ -350,6 +353,8 @@ private final class NonActivatingPanel: NSPanel {
     panel.hasShadow = false
     panel.ignoresMouseEvents = true
     panel.hidesOnDeactivate = false
+    // Hiding the app would order the panel out, which strands it like `hide()` avoids.
+    panel.canHide = false
     panel.isReleasedWhenClosed = false
     panel.animationBehavior = .none
     let hosting = NSHostingView(rootView: OverlayRoot(model: model, bars: bars))
@@ -373,7 +378,7 @@ private final class NonActivatingPanel: NSPanel {
   }
 
   /// Every placement this display can show, so a first press after switching style in Settings
-  /// is warm too.
+  /// is warm too. Leaves the panel ordered in at alpha 0, which is how it stays hidden.
   func prewarm(on screen: NSScreen, preference stored: OverlayPreference) {
     let geometry = ScreenGeometry(screen)
     var warmed: [OverlayPlacement] = []
@@ -390,9 +395,21 @@ private final class NonActivatingPanel: NSPanel {
       draw()
     }
     place(on: screen, preference: stored)
-    panel.orderOut(nil)
-    panel.alphaValue = 1
   }
+
+  /// Hidden by alpha and never ordered out. When a full-screen Space closes while a panel is
+  /// ordered out, the window server drops the panel from every other full-screen Space, despite
+  /// `canJoinAllSpaces`, until the app quits. A panel that stays ordered in keeps them.
+  func hide() {
+    panel.alphaValue = 0
+  }
+
+  func reveal() {
+    panel.alphaValue = 1
+    panel.orderFrontRegardless()
+  }
+
+  var isShown: Bool { panel.isVisible && panel.alphaValue > 0 }
 
   func draw() {
     hosting.layoutSubtreeIfNeeded()

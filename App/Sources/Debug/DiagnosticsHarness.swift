@@ -51,7 +51,9 @@
     private static func showSettings(_ model: AppModel) async {
       model.screen = .settings
       for _ in 0..<100 {
-        if let window = NSApplication.shared.windows.first(where: { $0.isVisible && $0.frame.width >= 600 }),
+        if let window = NSApplication.shared.windows.first(where: {
+          $0.isVisible && $0.canBecomeMain && $0.frame.width >= 600
+        }),
           let visible = window.screen?.visibleFrame
         {
           window.setFrame(

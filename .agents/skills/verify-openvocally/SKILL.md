@@ -33,6 +33,7 @@ Each script builds the app, launches it in the background with the arguments its
 | Dictation end to end | `make dictation-harness` or `scripts/latency/dictation-harness.sh --runs 3` | `results.jsonl` ends with a `"summary":true` line |
 | Screens of one feature | `make gallery-shots`, `make onboarding-shots`, `scripts/latency/transcripts-latency.sh --screenshots` | the script prints each PNG path |
 | Idle health | `make smoke-idle` | the script prints the settle time and the CPU percentage |
+| Overlay over full-screen apps | `.agents/skills/verify-openvocally/overlay-fullscreen.sh` | the script prints `PASS`, `FAIL` or `NOT REPRODUCED` |
 | Diagnostics export | `make diagnostics-export` | the script prints `PASS`, the log scope line and the build time |
 | A manual look | `RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh <app arguments>` | `scripts/show-logs.sh app 2m` shows the launch |
 
@@ -64,6 +65,7 @@ Every script writes its proof under `.build`, and the proof outlives cleanup:
 | `transcripts-latency.sh` | `.build/transcripts-latency/` |
 | `diagnostics-export.sh` | `.build/diagnostics-export/diagnostics.txt` |
 | `smoke-idle.sh` | its output only, so copy the last lines into your report |
+| `overlay-fullscreen.sh` | `.build/overlay-fullscreen/log.txt` (the overlay log for the last press) and `shot.png` |
 
 Read the app's own log with `scripts/show-logs.sh <category> [duration]`. Categories are app, capture, dictation-harness, hotkeys, latency, models, overlay, overlay-demo, paste, pipeline, screens, sound, storage, transcription, transcripts and transcripts-harness. In zsh, a bare `log` is a builtin, so always use the script.
 
@@ -87,6 +89,7 @@ It waits for the lock, quits only the Debug builds of this checkout and leaves e
 
 - `.agents/skills/verify-openvocally/doctor.sh` checks the instance. Its `--help` lists what it reads.
 - `.agents/skills/verify-openvocally/cleanup.sh` quits the Debug builds.
+- `.agents/skills/verify-openvocally/overlay-fullscreen.sh` checks the overlay over full-screen apps. It builds two helper apps from `fullscreen-window.swift` into `.build/overlay-fullscreen/helpers`.
 - `scripts/with-debug-app.sh <command>` runs any command under the Debug app lock.
 - `scripts/lib/window-id.swift` prints a process's window number, so `screencapture -l` captures that window even when others cover it. The screenshot scripts compile it to `.build/window-id`.
 - `scripts/lib/signing-identity.sh` prints the signing identity the build scripts use.
