@@ -353,6 +353,8 @@ private final class NonActivatingPanel: NSPanel {
     panel.hasShadow = false
     panel.ignoresMouseEvents = true
     panel.hidesOnDeactivate = false
+    // Hiding the app would order the panel out, which strands it like `hide()` avoids.
+    panel.canHide = false
     panel.isReleasedWhenClosed = false
     panel.animationBehavior = .none
     let hosting = NSHostingView(rootView: OverlayRoot(model: model, bars: bars))
