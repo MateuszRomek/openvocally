@@ -45,7 +45,8 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     ) { [weak self] note in
       let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
       // The lab activating itself, at launch or from its control window, isn't switching away.
-      guard app?.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
+      guard app?.processIdentifier != ProcessInfo.processInfo.processIdentifier, self?.lab.passive == false
+      else { return }
       MainActor.assumeIsolated { self?.lab.parkDraft() }
     }
     monitors.append(
@@ -94,6 +95,13 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     if args.contains("--main") { lab.scope = .main }
     if let look = value("--look") { lab.cardLook = CardLook.allCases.first { "\($0)" == look } ?? .calm }
     if args.contains("--hints") { lab.shortcutsHeld = true }
+    // Presses Return on the start card, for checking what the notch does next without a person.
+    if let delay = value("--start-after").flatMap(Double.init) {
+      Task {
+        try? await Task.sleep(for: .seconds(delay))
+        lab.startThread()
+      }
+    }
     if let keys = value("--keys") { lab.pickerKeys = PickerKeys.allCases.first { "\($0)" == keys } ?? .numbered }
     if args.contains("--prompt-text") { lab.promptStyle = .text }
     if args.contains("--worktree") { lab.lastSettings.worktree = true }

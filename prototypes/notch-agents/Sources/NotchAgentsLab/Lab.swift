@@ -80,6 +80,9 @@ import SwiftUI
   /// The motion of the latest change, which the shape's reveal follows. Nil for changes that
   /// follow a key press and must not animate.
   @ObservationIgnored private(set) var shapeMotion: Animation? = Tokens.swap
+  /// Until then, the shape is moving between levels, and content changes keep its motion. Without
+  /// this, a thread's first update right after a card closes would swap the morph's spring mid-flight.
+  @ObservationIgnored private var levelMotionUntil = Date.distantPast
   @ObservationIgnored var onLayoutChange: (() -> Void)?
   @ObservationIgnored var onOpenChange: ((ScreenID?, Level) -> Void)?
   /// Each thread works on its own, so a scenario, dictation and several agents never cancel
@@ -127,7 +130,9 @@ import SwiftUI
   var showsCard: Bool {
     guard arrival != .mark || keyRevealed, let front = frontApproval else { return false }
     switch dictation {
-    case .off: return true
+    // A start card that just closed hands its shape straight to the waiting approval; the
+    // top row's "Started" or "Discarded" crossfades meanwhile instead of holding the card back.
+    case .off, .started, .discarded: return true
     case .recording(let id): return id == front
     default: return false
     }
@@ -174,8 +179,15 @@ import SwiftUI
     return slowMotion ? base.speed(0.25) : base
   }
 
-  /// Every scene change goes through here, so the shape's reveal uses the same motion.
-  func animate(_ base: Animation, _ change: () -> Void) {
+  /// Every scene change goes through here, so the shape's reveal uses the same motion. A change of
+  /// level owns the shape's motion while it runs; anything else animates only its content then.
+  func animate(_ base: Animation, levelChange: Bool = false, _ change: () -> Void) {
+    if levelChange {
+      levelMotionUntil = .now.addingTimeInterval(slowMotion ? 1.6 : 0.4)
+    } else if Date.now < levelMotionUntil {
+      withAnimation(animation(base), change)
+      return
+    }
     shapeMotion = animation(base)
     withAnimation(shapeMotion, change)
   }
@@ -190,7 +202,7 @@ import SwiftUI
     let motion = fromKeyboard ? Tokens.instant : growing ? openMotion.animation : Tokens.close
     if openLevel == .peek { markPeekSeen() }
     if level == .peek { peekedThread = primaryThread?.id }
-    animate(motion) {
+    animate(motion, levelChange: true) {
       openScreen = level == .idle ? nil : screen
       openLevel = level
       // Opening lands on the thread the closed notch was speaking for, at list depth.
@@ -214,7 +226,7 @@ import SwiftUI
     if openLevel == .peek { markPeekSeen() }
     let viewed = viewedThisOpen.intersection(approvalOrder)
     viewedThisOpen = []
-    animate(fromKeyboard ? Tokens.instant : Tokens.close) {
+    animate(fromKeyboard ? Tokens.instant : Tokens.close, levelChange: true) {
       // You looked at these in the panel, so the notch doesn't grow them back as you close it.
       collapsedCards.formUnion(viewed)
       openScreen = nil
@@ -259,6 +271,7 @@ import SwiftUI
     speech?.cancel()
     // Recording feedback never animates in: it follows a key press and happens many times a day.
     shapeMotion = nil
+    levelMotionUntil = .distantPast
     var transaction = Transaction(animation: nil)
     transaction.disablesAnimations = true
     withTransaction(transaction) {
@@ -363,7 +376,7 @@ import SwiftUI
       rest.approval = nil
       rest.steps = ["Ran \(approval.command)"]
       afterApproval[id] = rest
-      animate(openMotion.animation) {
+      animate(openMotion.animation, levelChange: true) {
         update(id) { $0.state = .needsYou(approval) }
         approvalOrder.append(id)
       }
@@ -402,7 +415,7 @@ import SwiftUI
     var rest =
       afterApproval.removeValue(forKey: id)
       ?? Turn(prompt: nil, steps: [], approval: nil, reply: "Done.", end: .done("Done"))
-    animate(Tokens.close) {
+    animate(Tokens.close, levelChange: true) {
       settle(id)
       append(id, .tool, always ? "Allowed for this thread" : "Allowed once")
     }
@@ -414,7 +427,7 @@ import SwiftUI
   func deny(_ id: Int, reason: String? = nil) {
     guard approvalOrder.contains(id) else { return }
     afterApproval[id] = nil
-    animate(Tokens.close) {
+    animate(Tokens.close, levelChange: true) {
       settle(id)
       append(id, .tool, reason == nil ? "Denied" : "Denied, sent your reply as the reason")
     }
@@ -461,7 +474,7 @@ import SwiftUI
     Task {
       try? await pause(seconds)
       guard approvalOrder.contains(id), !keyRevealed else { return }
-      animate(Tokens.close) { collapsedCards.insert(id) }
+      animate(Tokens.close, levelChange: true) { collapsedCards.insert(id) }
     }
   }
 

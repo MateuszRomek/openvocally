@@ -283,7 +283,8 @@ extension Lab {
     else { return }
     remember(start.settings)
     guard start.settings.worktree, Lab.project(start.settings.project).isGit else {
-      finish(start)
+      // Return or a click: the card gets out of the way at keyboard speed.
+      finish(start, fromKeyboard: true)
       return
     }
     // A worktree thread shows its checklist before the first turn.
@@ -294,7 +295,7 @@ extension Lab {
         animate(Tokens.swap) { draft?.launchStep = step }
       }
       try? await pause(0.35)
-      finish(start)
+      finish(start, fromKeyboard: false)
     }
   }
 
@@ -306,10 +307,12 @@ extension Lab {
     return steps
   }
 
-  private func finish(_ start: StartDraft) {
+  /// The card turns into whatever the closed notch shows next in one move: an approval that
+  /// waited becomes the card's new shape directly, with "Started" crossfading in the top row.
+  private func finish(_ start: StartDraft, fromKeyboard: Bool) {
     let id = (threads.map(\.id).max() ?? 0) + 1
     let words = start.prompt.split(separator: " ").prefix(6).joined(separator: " ")
-    closeAll()
+    closeAll(fromKeyboard: fromKeyboard)
     draft = nil
     swap {
       threads.append(

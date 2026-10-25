@@ -159,6 +159,8 @@ final class Stage {
   }
 
   private func pointerMoved() {
+    // Scripted runs ignore whoever is using the Mac meanwhile.
+    guard !lab.passive else { return }
     let point = NSEvent.mouseLocation
     let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
     if lab.pointerScreen != screen?.screenID { lab.pointerScreen = screen?.screenID }
@@ -197,6 +199,7 @@ final class Stage {
 
   private func clickedOutside() {
     // Global monitors only see clicks in other apps, so every click here is outside the panel.
+    guard !lab.passive else { return }
     if lab.openLevel == .start {
       lab.parkDraft()
     } else if lab.openLevel == .expanded {
