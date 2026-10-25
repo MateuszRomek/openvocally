@@ -24,6 +24,7 @@ nonisolated enum Tokens {
   static let dropInset: CGFloat = 12
   static let panelWidth: CGFloat = 460
   static let peekWidth: CGFloat = 380
+  static let cardWidth: CGFloat = 560
 }
 
 // MARK: - Agents
@@ -145,6 +146,10 @@ enum Dictation: Equatable {
   case transcribing(thread: Int?)
   case pasted
   case sent(thread: Int)
+  /// A start card turned into a running thread.
+  case started(thread: Int)
+  /// Esc threw away a start card that had a prompt.
+  case discarded
   /// What was said while an approval waited went to the agent as the reason for denying it.
   case deniedWithReason(thread: Int)
 }
@@ -156,6 +161,8 @@ enum Level: Equatable {
   /// An approval the notch grew to show on its own. Never takes keyboard focus.
   case approval
   case expanded
+  /// The start card for a new thread. Takes keyboard focus without activating the app.
+  case start
 }
 
 // MARK: - Options

@@ -119,7 +119,7 @@ final class Stage {
     lab.onLayoutChange = { [weak self] in self?.refresh() }
     lab.onOpenChange = { [weak self] screen, level in
       guard let self else { return }
-      for (id, host) in hosts { host.setKey(!lab.passive && id == screen && level == .expanded) }
+      for (id, host) in hosts { host.setKey(!lab.passive && id == screen && (level == .expanded || level == .start)) }
     }
     let moved: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
     monitors.append(
@@ -197,6 +197,10 @@ final class Stage {
 
   private func clickedOutside() {
     // Global monitors only see clicks in other apps, so every click here is outside the panel.
-    if lab.openLevel == .expanded { lab.closeAll() }
+    if lab.openLevel == .start {
+      lab.parkDraft()
+    } else if lab.openLevel == .expanded {
+      lab.closeAll()
+    }
   }
 }

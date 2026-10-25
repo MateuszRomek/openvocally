@@ -13,6 +13,11 @@ struct NotchRoot: View {
     VStack(spacing: 0) {
       let level = lab.level(on: display.screen)
       SurfaceView(lab: lab, metrics: metrics, level: level, pill: pill) {
+        if level != .approval, lab.primaryThread == nil, lab.draft != nil {
+          // A click on the draft mark brings its card back.
+          lab.openCard(fromKeyboard: false, on: display.screen.screenID)
+          return
+        }
         // A click on an approval card opens the thread that asked.
         lab.open(
           .expanded, on: display.screen.screenID, thread: level == .approval ? lab.frontApproval : nil)
@@ -60,6 +65,10 @@ struct SurfaceView: View {
           StatusRow(lab: lab, metrics: metrics, pill: pill)
           if let target = speakingTo { DropLine(text: "Speaking to \(target)") }
           if case .deniedWithReason = lab.dictation { DropLine(text: "Denied. What you said went as the reason.") }
+          if lab.newThreadArmed, lab.dictation == .off { DropLine(text: "Hold right ⌘ to start a new thread") }
+          if lab.draftMark == .line, lab.dictation == .off, lab.primaryThread == nil, let draft = lab.draft {
+            DropLine(text: draft.prompt)
+          }
         }
         .transition(.blurReplace)
       case .peek:
@@ -84,6 +93,13 @@ struct SurfaceView: View {
         }
         .frame(width: lab.panelWidth)
         .transition(.blurReplace)
+      case .start:
+        VStack(spacing: 0) {
+          StatusRow(lab: lab, metrics: metrics, pill: pill)
+          StartCard(lab: lab)
+        }
+        .frame(width: Tokens.cardWidth)
+        .transition(.blurReplace)
       }
     }
     .frame(minWidth: minSize.width, minHeight: minSize.height, alignment: .top)
@@ -100,7 +116,7 @@ struct SurfaceView: View {
     .clipShape(shape)
     .background { backdrop(shape) }
     .contentShape(shape)
-    .onTapGesture { if level != .expanded { openPanel() } }
+    .onTapGesture { if level != .expanded, level != .start { openPanel() } }
     .opacity(hidden ? 0 : 1)
     .scaleEffect(pill && hidden ? 0.9 : 1, anchor: .top)
   }
@@ -153,7 +169,7 @@ struct SurfaceView: View {
       if pill { return CGSize(width: 120, height: 32) }
       if !metrics.isReal, lab.idleOnNotchless == .resting { return notch }
       return CGSize(width: notch.width - 4, height: notch.height - 2)
-    case .status, .peek, .approval, .expanded:
+    case .status, .peek, .approval, .expanded, .start:
       return pill
         ? CGSize(width: 120, height: 36)
         : CGSize(width: notch.width + 2 * Tokens.wing, height: notch.height)
@@ -166,7 +182,7 @@ struct SurfaceView: View {
       case .idle, .status: return SurfaceRadii(flare: 0, top: 18, bottom: 18)
       case .peek: return SurfaceRadii(flare: 0, top: 18, bottom: 20)
       case .approval: return SurfaceRadii(flare: 0, top: 22, bottom: 24)
-      case .expanded: return SurfaceRadii(flare: 0, top: 22, bottom: 26)
+      case .expanded, .start: return SurfaceRadii(flare: 0, top: 22, bottom: 26)
       }
     }
     switch level {
@@ -176,17 +192,18 @@ struct SurfaceView: View {
     case .status: return SurfaceRadii(flare: 6, top: 0, bottom: 12)
     case .peek: return SurfaceRadii(flare: 10, top: 0, bottom: 20)
     case .approval: return SurfaceRadii(flare: 12, top: 0, bottom: 24)
-    case .expanded: return SurfaceRadii(flare: 14, top: 0, bottom: 26)
+    case .expanded, .start: return SurfaceRadii(flare: 14, top: 0, bottom: 26)
     }
   }
 
   private var speakingTo: String? {
-    guard lab.showTarget, case .recording(let id?) = lab.dictation else { return nil }
-    return lab.thread(id)?.title
+    guard lab.showTarget, lab.openLevel != .start, case .recording(let id?) = lab.dictation else { return nil }
+    return id == Lab.newThreadTarget ? "a new thread" : lab.thread(id)?.title
   }
 
   private var peekText: String {
     guard let thread = lab.primaryThread else {
+      if let draft = lab.draft { return "Draft · \(draft.prompt)" }
       // A peek is a deliberate look, so it can name the ambient work the closed notch hides.
       let working = lab.threads.filter { if case .working = $0.state { true } else { false } }.count
       return switch working {
@@ -242,15 +259,20 @@ struct StatusRow: View {
   @ViewBuilder private var leading: some View {
     switch lab.dictation {
     case .recording(let thread), .transcribing(let thread):
-      Glyph(
-        symbol: thread.flatMap { lab.thread($0)?.provider.symbol } ?? "mic.fill",
-        tint: isRecording ? .white : .secondary)
+      Glyph(symbol: symbol(for: thread), tint: isRecording ? .white : .secondary)
     case .pasted: Glyph(symbol: "checkmark", tint: .white)
-    case .sent: Glyph(symbol: "arrow.up", tint: .white)
+    case .sent, .started: Glyph(symbol: "arrow.up", tint: .white)
+    case .discarded: Glyph(symbol: "xmark", tint: .white)
     case .deniedWithReason: Glyph(symbol: "xmark", tint: .white)
     case .off:
       if let thread = lab.primaryThread {
         Glyph(symbol: thread.provider.symbol, tint: .white).id(thread.id)
+      } else if lab.openLevel == .start, let draft = lab.draft {
+        Glyph(symbol: draft.settings.provider.symbol, tint: .white).id(draft.settings.provider)
+      } else if lab.draft != nil {
+        Glyph(symbol: "square.and.pencil", tint: .white)
+      } else if lab.newThreadArmed {
+        Glyph(symbol: "plus", tint: .white)
       } else {
         Glyph(symbol: "waveform", tint: .secondary)
       }
@@ -263,6 +285,8 @@ struct StatusRow: View {
     case .transcribing: Bars(levels: lab.levels, live: false)
     case .pasted: Word(text: "Pasted")
     case .sent: Word(text: "Sent")
+    case .started: Word(text: "Started")
+    case .discarded: Word(text: "Discarded")
     case .deniedWithReason: Word(text: "Denied")
     case .off:
       if let thread = lab.primaryThread {
@@ -270,10 +294,22 @@ struct StatusRow: View {
           StateMark(state: thread.state, indicator: lab.working)
           if lab.attentionThreads.count > 1 { Badge(count: lab.attentionThreads.count) }
         }
+      } else if lab.openLevel == .start {
+        Word(text: "New thread")
+      } else if lab.draft != nil {
+        if lab.draftMark != .glyph { Word(text: "Draft") }
+      } else if lab.newThreadArmed {
+        Word(text: "New thread")
       } else {
         Word(text: "\(lab.threads.count) threads")
       }
     }
+  }
+
+  private func symbol(for target: Int?) -> String {
+    guard let target else { return "mic.fill" }
+    if target == Lab.newThreadTarget { return (lab.draft?.settings ?? lab.lastSettings).provider.symbol }
+    return lab.thread(target)?.provider.symbol ?? "mic.fill"
   }
 
   private var isRecording: Bool {

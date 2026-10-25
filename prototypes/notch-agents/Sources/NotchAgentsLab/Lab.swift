@@ -28,6 +28,12 @@ import SwiftUI
   var allowPlacement: AllowPlacement = .menu
   var cardLinger: CardLinger = .shrinks
   var voiceTarget: VoiceTarget = .card
+  var pickerKeys: PickerKeys = .numbered
+  var promptStyle: PromptStyle = .field
+  var draftMark: DraftMark = .word
+  var newThreadKeyBehavior: NewThreadKey = .card
+  var respeak: Respeak = .replace
+  var draftOnNew: DraftOnNew = .reopen
 
   // Scene
   var threads: [AgentThread] = Lab.seed()
@@ -49,6 +55,24 @@ import SwiftUI
   var cardIndex = 0
   /// A key answer arrived while no card was on screen, so the card came back first.
   private(set) var keyRevealed = false
+
+  // Start card
+  /// The new thread being set up. Survives clicking away, as the draft mark.
+  var draft: StartDraft?
+  /// The picker whose list shows in the card.
+  var openControl: CardControl?
+  /// The chip Tab moved to. Nil is the prompt.
+  var focusedControl: CardControl?
+  var highlight = 0
+  var filter = ""
+  var editingPrompt = false
+  /// Key presses since the card opened, to compare how fast each key scheme is.
+  var cardKeys = 0
+  /// ⌥T in the target-only variant: the next agent recording starts a new thread.
+  var newThreadArmed = false
+  var lastSettings = Lab.firstSettings
+  var lastByProject = Lab.projectSettings
+  var lastByProvider: [Provider: ThreadSettings] = [:]
 
   /// The motion of the latest change, which the shape's reveal follows. Nil for changes that
   /// follow a key press and must not animate.
@@ -108,6 +132,7 @@ import SwiftUI
 
   /// Where agent mode sends speech: the open thread, else the card's thread, else the selection.
   var agentTarget: Int? {
+    if openLevel == .start || newThreadArmed { return Lab.newThreadTarget }
     if let openThread { return openThread }
     if voiceTarget == .card, openLevel == .idle, showsCard, let front = frontApproval { return front }
     return selectedThread ?? threads.first?.id
@@ -136,7 +161,9 @@ import SwiftUI
     if openScreen == screen.screenID, openLevel != .idle { return openLevel }
     guard shows(on: screen) else { return .idle }
     if showsCard { return .approval }
-    return dictation != .off || primaryThread != nil ? .status : .idle
+    // A card open on another display is shown there only.
+    let draftShows = draft != nil && openLevel != .start
+    return dictation != .off || primaryThread != nil || draftShows || newThreadArmed ? .status : .idle
   }
 
   func animation(_ base: Animation) -> Animation {
@@ -155,7 +182,7 @@ import SwiftUI
   /// `thread` opens the panel straight into that thread, for a click on its approval card.
   func open(_ level: Level, on screen: ScreenID, fromKeyboard: Bool = false, thread: Int? = nil) {
     guard openScreen != screen || openLevel != level else { return }
-    let growing = level == .expanded || (level == .peek && openLevel == .idle)
+    let growing = level == .expanded || level == .start || (level == .peek && openLevel == .idle)
     let wasExpanded = openLevel == .expanded
     let motion = fromKeyboard ? Tokens.instant : growing ? openMotion.animation : Tokens.close
     if openLevel == .peek { markPeekSeen() }
@@ -244,6 +271,20 @@ import SwiftUI
     speech = Task {
       try? await pause(0.45)
       guard !Task.isCancelled else { return }
+      if target == Lab.newThreadTarget {
+        animate(Tokens.hide) { dictation = .off }
+        receiveSpeech()
+        return
+      }
+      if target == nil, openLevel == .start {
+        // Plain dictation pastes into the focused card like any text field.
+        pasteIntoCard()
+        swap { dictation = .pasted }
+        try? await pause(1.1)
+        guard !Task.isCancelled else { return }
+        animate(Tokens.hide) { dictation = .off }
+        return
+      }
       if let target, approvalOrder.contains(target) {
         // Voice never approves: speaking while an approval waits denies it, with what you said.
         swap { dictation = .deniedWithReason(thread: target) }
@@ -481,11 +522,11 @@ import SwiftUI
     update(id) { $0.messages.append(message) }
   }
 
-  private func swap(_ change: () -> Void) {
+  func swap(_ change: () -> Void) {
     animate(Tokens.swap, change)
   }
 
-  private func pause(_ seconds: Double) async throws {
+  func pause(_ seconds: Double) async throws {
     try await Task.sleep(for: .seconds(seconds * (slowMotion ? 4 : 1)))
   }
 
@@ -502,6 +543,8 @@ import SwiftUI
     case threeApprovals = "Three approvals"
     case longCommand = "Long command"
     case riskyTail = "Risky tail"
+    case speakNew = "Speak a new thread"
+    case speakAgain = "Speak again into the card"
     case reset = "Reset"
     var id: Self { self }
   }
@@ -552,6 +595,13 @@ import SwiftUI
         start(3, Lab.siteTurn)
       case .longCommand:
         start(1, Lab.longTurn)
+      case .speakNew, .speakAgain:
+        // Agent mode with a new thread as the target: hold, talk, release.
+        if scenario == .speakNew, openLevel != .start { newThreadArmed = true }
+        press(agentMode: true)
+        try? await pause(1.8)
+        guard !Task.isCancelled else { return }
+        release()
       case .riskyTail:
         start(2, Lab.tailTurn)
       case .many:
@@ -590,6 +640,11 @@ import SwiftUI
       threads = Lab.seed()
       dictation = .off
       openThread = nil
+      draft = nil
+      newThreadArmed = false
+      lastSettings = Lab.firstSettings
+      lastByProject = Lab.projectSettings
+      lastByProvider = [:]
     }
     closeAll()
   }

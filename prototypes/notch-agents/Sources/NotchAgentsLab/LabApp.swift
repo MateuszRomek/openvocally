@@ -22,6 +22,7 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
   private var stage: Stage?
   private var monitors: [Any] = []
   private var screenObserver: (any NSObjectProtocol)?
+  private var activationObserver: (any NSObjectProtocol)?
   private var rightCommandDown = false
   private var rightOptionDown = false
 
@@ -37,6 +38,12 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
       forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
     ) { [weak self] _ in
       MainActor.assumeIsolated { self?.screensChanged() }
+    }
+    // Switching apps, by ⌘Tab or a click, parks the start card as a draft.
+    activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+      forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.lab.parkDraft() }
     }
     monitors.append(
       NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
@@ -81,6 +88,11 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     if let queue = value("--queue") { lab.approvalQueue = ApprovalQueue.allCases.first { "\($0)" == queue } ?? .oneAtATime }
     if args.contains("--one-line") { lab.commandLength = .oneLine }
     if args.contains("--everywhere") { lab.scope = .all }
+    if args.contains("--main") { lab.scope = .main }
+    if let keys = value("--keys") { lab.pickerKeys = PickerKeys.allCases.first { "\($0)" == keys } ?? .numbered }
+    if args.contains("--prompt-text") { lab.promptStyle = .text }
+    if args.contains("--worktree") { lab.lastSettings.worktree = true }
+    if let mark = value("--mark") { lab.draftMark = DraftMark.allCases.first { "\($0)" == mark } ?? .word }
     // Holds agent mode once the cards are up, to show the card's voice-deny state.
     if let delay = value("--speak-after").flatMap(Double.init) {
       Task {
@@ -101,6 +113,14 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     case "approvals": lab.play(.threeApprovals)
     case "long": lab.play(.longCommand)
     case "tail": lab.play(.riskyTail)
+    case "start": lab.newThreadKey()
+    case "spoken": lab.play(.speakNew)
+    case "draft":
+      lab.play(.speakNew)
+      Task {
+        try? await Task.sleep(for: .seconds(3.5))
+        lab.parkDraft()
+      }
     default: break
     }
     let thread = value("--thread").flatMap(Int.init)
@@ -117,6 +137,11 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
   /// ⌥↩ allows and ⌥⎋ denies the front approval card.
   private func handleAnswerKey(_ event: NSEvent) -> Bool {
     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock)
+    // ⌥T starts a new thread from any app.
+    if flags == .option, event.keyCode == 17, !event.isARepeat {
+      lab.newThreadKey()
+      return true
+    }
     guard flags == .option, !event.isARepeat, !lab.approvalOrder.isEmpty else { return false }
     switch event.keyCode {
     case 36: lab.answerFromKeyboard(allow: true)
@@ -152,6 +177,7 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
   /// Space and A hold to talk, O opens the panel, Esc closes it. Keys typed into the notch panel
   /// pass through untouched.
   private func handleKey(_ event: NSEvent) -> Bool {
+    if lab.openLevel == .start, event.window is NotchPanel { return lab.cardKey(event) }
     guard !(event.window is NotchPanel) else { return false }
     if event.type == .keyDown, handleAnswerKey(event) { return true }
     guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock).isEmpty
@@ -165,6 +191,7 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     guard event.type == .keyDown, !event.isARepeat else { return false }
     switch key {
     case "o": lab.toggleOpen()
+    case "t": lab.newThreadKey()
     case "\u{1b}": lab.escape()
     default: return false
     }
@@ -243,6 +270,32 @@ private struct ControlPanel: View {
           ForEach(VoiceTarget.allCases) { Text($0.rawValue).tag($0) }
         }
       }
+      Section("Start card") {
+        Picker("Picker keys", selection: $lab.pickerKeys) {
+          ForEach(PickerKeys.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Prompt", selection: $lab.promptStyle) {
+          ForEach(PromptStyle.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("⌥T", selection: $lab.newThreadKeyBehavior) {
+          ForEach(NewThreadKey.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("⌥T with a draft waiting", selection: $lab.draftOnNew) {
+          ForEach(DraftOnNew.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Agent mode into an open card", selection: $lab.respeak) {
+          ForEach(Respeak.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Draft mark", selection: $lab.draftMark) {
+          ForEach(DraftMark.allCases) { Text($0.rawValue).tag($0) }
+        }
+        LabeledContent("Keys pressed in the last card", value: "\(lab.cardKeys)")
+        HStack {
+          Button("New thread (⌥T)") { lab.newThreadKey() }
+          Button(Lab.Scenario.speakNew.rawValue) { lab.play(.speakNew) }
+          Button(Lab.Scenario.speakAgain.rawValue) { lab.play(.speakAgain) }
+        }
+      }
       Section("Sequences") {
         HStack {
           ForEach(Lab.Scenario.allCases.prefix(4)) { scenario in
@@ -255,7 +308,7 @@ private struct ControlPanel: View {
           }
         }
         HStack {
-          ForEach(Lab.Scenario.allCases.dropFirst(8)) { scenario in
+          ForEach(Lab.Scenario.allCases.dropFirst(8).filter { $0 != .speakNew && $0 != .speakAgain }) { scenario in
             Button(scenario.rawValue) { lab.play(scenario) }
           }
         }
@@ -271,6 +324,7 @@ private struct ControlPanel: View {
           Anywhere: hold right ⌥ to dictate, right ⌘ for agent mode (needs Accessibility for the terminal).
           Hover the notch to peek; click it to open. In the list: ↑ ↓ and Return open a thread. In a thread: Esc or ⌘[ goes back, ⌘O hands off to the main window, ⌘↩ allow, ⌘⌫ deny.
           An approval card in the closed notch: click Allow or Deny, or ⌥↩ and ⌥⎋ from any app. Hold A or right ⌘ while it shows to deny it by voice.
+          New thread: T here or ⌥T anywhere opens the start card. Return starts, Esc steps back then discards, clicking another app parks it as a draft. Right ⌘ speaks into the card, right ⌥ dictates at its caret.
           """
         )
         .font(.callout).foregroundStyle(.secondary)
