@@ -1,0 +1,415 @@
+import AppKit
+import SwiftUI
+
+@main struct LabApp: App {
+  @NSApplicationDelegateAdaptor private var delegate: LabDelegate
+
+  var body: some Scene {
+    Window("Notch Agents Lab", id: "lab") {
+      ControlPanel(lab: delegate.lab, displays: delegate.displays)
+    }
+    .windowResizability(.contentSize)
+  }
+}
+
+@Observable final class Displays {
+  var summary = ""
+}
+
+final class LabDelegate: NSObject, NSApplicationDelegate {
+  let lab = Lab()
+  let displays = Displays()
+  private var stage: Stage?
+  private var monitors: [Any] = []
+  private var screenObserver: (any NSObjectProtocol)?
+  private var rightCommandDown = false
+  private var rightOptionDown = false
+
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    NSApp.setActivationPolicy(.regular)
+    // Scripted screenshot runs leave the keyboard with whatever app you are typing in.
+    if !CommandLine.arguments.contains("--passive") { NSApp.activate() }
+    let stage = Stage(lab: lab)
+    self.stage = stage
+    displays.summary = stage.displaySummary
+    playDemo()
+    screenObserver = NotificationCenter.default.addObserver(
+      forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.screensChanged() }
+    }
+    monitors.append(
+      NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+        guard let self else { return event }
+        return handleKey(event) ? nil : event
+      } as Any)
+    // Right ⌘ is agent mode and right ⌥ is dictation, from any app when the launching terminal has
+    // Accessibility access, and in the lab otherwise.
+    monitors.append(
+      NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+        self?.handleFlags(event)
+        return event
+      } as Any)
+    monitors.append(
+      NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+        MainActor.assumeIsolated { self?.handleFlags(event) }
+      } as Any)
+    // ⌥↩ and ⌥⎋ answer an approval from any app. A global monitor can't swallow the key, so the
+    // frontmost app sees it too; the real app captures it only while an approval is pending.
+    monitors.append(
+      NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        MainActor.assumeIsolated { _ = self?.handleAnswerKey(event) }
+      } as Any)
+  }
+
+  /// `[--backdrop shoulders|shadow|pill] [--resting] [--preview] [--demo busy|needs|answer|many|failed|record|agent]
+  /// [--size compact|roomy|large] [--thread <id>] [--passive] [--open]`, with
+  /// `--open` last: AppKit reads `--open x` as a defaults pair and opens a leftover word as a file.
+  /// sets up a scene on launch, for screenshots without driving the control window.
+  private func playDemo() {
+    let args = CommandLine.arguments
+    func value(_ flag: String) -> String? {
+      args.firstIndex(of: flag).flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
+    }
+    if let backdrop = value("--backdrop") {
+      lab.backdrop = Backdrop.allCases.first { "\($0)" == backdrop } ?? .plain
+    }
+    if args.contains("--resting") { lab.idleOnNotchless = .resting }
+    if args.contains("--preview") { lab.panelLayout = .preview }
+    if args.contains("--passive") { lab.passive = true }
+    if let arrival = value("--arrival") { lab.arrival = ApprovalArrival.allCases.first { "\($0)" == arrival } ?? .card }
+    if let queue = value("--queue") { lab.approvalQueue = ApprovalQueue.allCases.first { "\($0)" == queue } ?? .oneAtATime }
+    if args.contains("--one-line") { lab.commandLength = .oneLine }
+    if args.contains("--everywhere") { lab.scope = .all }
+    // Holds agent mode once the cards are up, to show the card's voice-deny state.
+    if let delay = value("--speak-after").flatMap(Double.init) {
+      Task {
+        try? await Task.sleep(for: .seconds(delay))
+        lab.press(agentMode: true)
+      }
+    }
+    if args.contains("--allow-menu") { lab.allowPlacement = .menu }
+    if args.contains("--all-questions") { lab.questionLayout = .all }
+    if args.contains("--chips") { lab.optionStyle = .chips }
+    if args.contains("--click-only") { lab.optionKeys = .none }
+    if args.contains("--lasting-first") { lab.lastingFirst = .lasting }
+    if args.contains("--form-panel") { lab.formPlacement = .panel }
+    // Picks an option a moment after the cards are up, to show a picked state.
+    if let delay = value("--pick-after").flatMap(Double.init) {
+      Task {
+        try? await Task.sleep(for: .seconds(delay))
+        if let front = lab.frontApproval { lab.pick(front, question: lab.currentQuestion(front), option: 0) }
+      }
+    }
+    if let ambient = value("--ambient") { lab.ambient = AmbientWorking.allCases.first { "\($0)" == ambient } ?? .nothing }
+    if let signal = value("--signal") { lab.attentionArrival = AttentionArrival.allCases.first { "\($0)" == signal } ?? .glow }
+    if let done = value("--done") { lab.doneMark = DoneMark.allCases.first { "\($0)" == done } ?? .check }
+    if let failed = value("--failed-tint") { lab.failedTint = FailedTint.allCases.first { "\($0)" == failed } ?? .red }
+    if args.contains("--reduce-motion") { lab.reduceMotion = true }
+    if let size = value("--size") { lab.threadSize = ThreadSize.allCases.first { "\($0)" == size } ?? .roomy }
+    switch value("--demo") {
+    case "busy": lab.play(.busy)
+    case "needs": lab.play(.needsYou)
+    case "answer": lab.play(.answer)
+    case "many": lab.play(.many)
+    case "failed": lab.play(.failed)
+    case "record": lab.press(agentMode: false)
+    case "agent": lab.press(agentMode: true)
+    case "approvals": lab.play(.threeApprovals)
+    case "long": lab.play(.longCommand)
+    case "tail": lab.play(.riskyTail)
+    case "question": lab.play(.question)
+    case "questions": lab.play(.questions)
+    case "browser": lab.play(.browser)
+    case "app": lab.play(.app)
+    case "form": lab.play(.form)
+    case "link": lab.play(.link)
+    case "mixed": lab.play(.mixed)
+    case "working": lab.play(.working)
+    case "signals": lab.play(.signals)
+    case "dictating": lab.play(.duringDictation)
+    default: break
+    }
+    // Plays one signal demo by its position in the control window, counting from 1.
+    if let index = value("--run").flatMap(Int.init), SignalDemo.all.indices.contains(index - 1) {
+      lab.run(SignalDemo.all[index - 1])
+    }
+    let thread = value("--thread").flatMap(Int.init)
+    if args.contains("--open") || thread != nil {
+      Task {
+        try? await Task.sleep(for: .seconds(2.5))
+        lab.open(.expanded, on: NSScreen.main?.screenID ?? 0)
+        if let thread { lab.show(thread: thread) }
+      }
+    }
+  }
+
+
+  /// ⌥↩ allows and ⌥⎋ denies the front approval card; ⌥1–⌥9 pick an option on a question card.
+  private func handleAnswerKey(_ event: NSEvent) -> Bool {
+    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock)
+    guard flags == .option, !event.isARepeat, !lab.approvalOrder.isEmpty else { return false }
+    // Key codes for 1–9 on the top row, which ⌥ turns into symbols, so read the code.
+    let digits: [UInt16: Int] = [18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9]
+    if let number = digits[event.keyCode] { return lab.pickFromKeyboard(number) }
+    switch event.keyCode {
+    case 36: lab.answerFromKeyboard(allow: true)
+    case 53: lab.answerFromKeyboard(allow: false)
+    default: return false
+    }
+    return true
+  }
+
+  private func screensChanged() {
+    stage?.rebuild()
+    displays.summary = stage?.displaySummary ?? ""
+  }
+
+  private func handleFlags(_ event: NSEvent) {
+    let flags = event.modifierFlags
+    switch event.keyCode {
+    case 54:
+      let down = flags.contains(.command)
+      guard down != rightCommandDown else { return }
+      rightCommandDown = down
+      down ? lab.press(agentMode: true) : lab.release()
+    case 61:
+      let down = flags.contains(.option)
+      guard down != rightOptionDown else { return }
+      rightOptionDown = down
+      down ? lab.press(agentMode: false) : lab.release()
+    default:
+      break
+    }
+  }
+
+  /// Space and A hold to talk, O opens the panel, Esc closes it. Keys typed into the notch panel
+  /// pass through untouched.
+  private func handleKey(_ event: NSEvent) -> Bool {
+    guard !(event.window is NotchPanel) else { return false }
+    if event.type == .keyDown, handleAnswerKey(event) { return true }
+    guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock).isEmpty
+    else { return false }
+    let key = event.charactersIgnoringModifiers ?? ""
+    if key == " " || key == "a" {
+      if event.type == .keyDown, !event.isARepeat { lab.press(agentMode: key == "a") }
+      if event.type == .keyUp { lab.release() }
+      return true
+    }
+    guard event.type == .keyDown, !event.isARepeat else { return false }
+    switch key {
+    case "o": lab.toggleOpen()
+    case "\u{1b}": lab.escape()
+    default: return false
+    }
+    return true
+  }
+}
+
+private struct ControlPanel: View {
+  @Bindable var lab: Lab
+  let displays: Displays
+  @State private var showsEarlier = false
+
+  var body: some View {
+    Form {
+      Section("Activity and attention signals") {
+        Text("Each button resets the notch, sets the options below and plays. Keep the pointer on the display you want to watch, below the menu bar: hovering the notch peeks, and a peek marks Done as seen.")
+          .font(.callout).foregroundStyle(.secondary)
+        ForEach(SignalDemo.groups, id: \.self) { group in
+          LabeledContent(group) {
+            HStack(spacing: 6) {
+              ForEach(SignalDemo.all.filter { $0.group == group }) { demo in
+                Button(demo.title) { lab.run(demo) }
+                  .buttonStyle(.bordered)
+                  .tint(lab.nowShowing == demo.id ? .accentColor : nil)
+              }
+            }
+          }
+        }
+        if let demo = SignalDemo.all.first(where: { $0.id == lab.nowShowing }) {
+          VStack(alignment: .leading, spacing: 4) {
+            Text("\(demo.group): \(demo.title)").font(.headline)
+            Text(demo.watch).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+          }
+          HStack {
+            Button("Replay") { lab.run(demo) }.keyboardShortcut("r", modifiers: [])
+            Button("Play with my picks") { lab.reset(); lab.play(demo.scenario) }
+            Button("Reset") { lab.play(.reset) }
+          }
+        }
+      }
+      Section("Signal options") {
+        Picker("Working, closed", selection: $lab.ambient) {
+          ForEach(AmbientWorking.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Needs you or Failed arrives", selection: $lab.attentionArrival) {
+          ForEach(AttentionArrival.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Unseen Done", selection: $lab.doneMark) {
+          ForEach(DoneMark.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Failed", selection: $lab.failedTint) {
+          ForEach(FailedTint.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Approval arrives as", selection: $lab.arrival) {
+          ForEach(ApprovalArrival.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Toggle("Reduce Motion", isOn: $lab.reduceMotion)
+        Toggle("Slow motion (4× slower)", isOn: $lab.slowMotion)
+      }
+      Section {
+        Toggle("Show options from earlier tickets", isOn: $showsEarlier)
+      }
+      if showsEarlier {
+        earlier
+      }
+    }
+    .formStyle(.grouped)
+    .frame(width: 720)
+  }
+
+  @ViewBuilder private var earlier: some View {
+      Section("Displays") {
+        Text(displays.summary).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+        Picker("Show on", selection: $lab.scope) {
+          ForEach(DisplayScope.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Toggle("Treat a real notch as missing", isOn: $lab.forceNotchless)
+      }
+      Section("Display without a notch") {
+        Picker("Surface", selection: $lab.backdrop) {
+          ForEach(Backdrop.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Simulated notch height", selection: simulatedHeight) {
+          ForEach(SimulatedHeight.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("When idle", selection: $lab.idleOnNotchless) {
+          ForEach(IdleOnNotchless.allCases) { Text($0.rawValue).tag($0) }
+        }
+      }
+      Section("Behavior") {
+        Picker("Hover", selection: $lab.hover) {
+          ForEach(HoverBehavior.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Hover zone below the notch", selection: $lab.hoverReach) {
+          ForEach(HoverReach.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Toggle("Outline the hover zone", isOn: $lab.showHoverZone)
+        Picker("Open panel closes when", selection: $lab.close) {
+          ForEach(CloseBehavior.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Open motion", selection: $lab.openMotion) {
+          ForEach(OpenMotion.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Open panel", selection: $lab.panelLayout) {
+          ForEach(PanelLayout.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Thread size", selection: $lab.threadSize) {
+          ForEach(ThreadSize.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Working", selection: $lab.working) {
+          ForEach(WorkingIndicator.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Toggle("Agent mode names the thread while you speak", isOn: $lab.showTarget)
+      }
+      Section("Approvals") {
+        Picker("When one arrives", selection: $lab.arrival) {
+          ForEach(ApprovalArrival.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Several at once", selection: $lab.approvalQueue) {
+          ForEach(ApprovalQueue.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Command", selection: $lab.commandLength) {
+          ForEach(CommandLength.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Allow for this thread", selection: $lab.allowPlacement) {
+          ForEach(AllowPlacement.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Card stays", selection: $lab.cardLinger) {
+          ForEach(CardLinger.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Agent mode speaks to", selection: $lab.voiceTarget) {
+          ForEach(VoiceTarget.allCases) { Text($0.rawValue).tag($0) }
+        }
+      }
+      Section("Questions") {
+        Picker("Several questions", selection: $lab.questionLayout) {
+          ForEach(QuestionLayout.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Options", selection: $lab.optionStyle) {
+          ForEach(OptionStyle.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Number keys", selection: $lab.optionKeys) {
+          ForEach(OptionKeys.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Question card stays", selection: $lab.questionLinger) {
+          ForEach(QuestionLinger.allCases) { Text($0.rawValue).tag($0) }
+        }
+      }
+      Section("Browser, Computer Use and MCP") {
+        Picker("Allow button", selection: $lab.lastingFirst) {
+          ForEach(LastingFirst.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("MCP form", selection: $lab.formPlacement) {
+          ForEach(FormPlacement.allCases) { Text($0.rawValue).tag($0) }
+        }
+      }
+      Section("Sequences") {
+        HStack {
+          ForEach(Lab.Scenario.allCases.prefix(4)) { scenario in
+            Button(scenario.rawValue) { lab.play(scenario) }
+          }
+        }
+        HStack {
+          ForEach(Lab.Scenario.allCases.dropFirst(4).prefix(4)) { scenario in
+            Button(scenario.rawValue) { lab.play(scenario) }
+          }
+        }
+        HStack {
+          ForEach(Lab.Scenario.allCases.dropFirst(8).prefix(4)) { scenario in
+            Button(scenario.rawValue) { lab.play(scenario) }
+          }
+        }
+        HStack {
+          ForEach(Lab.Scenario.allCases.dropFirst(12).prefix(4)) { scenario in
+            Button(scenario.rawValue) { lab.play(scenario) }
+          }
+        }
+        HStack {
+          ForEach(Lab.Scenario.allCases.dropFirst(16).prefix(4)) { scenario in
+            Button(scenario.rawValue) { lab.play(scenario) }
+          }
+        }
+        HStack {
+          ForEach(Lab.Scenario.allCases.dropFirst(20)) { scenario in
+            Button(scenario.rawValue) { lab.play(scenario) }
+          }
+        }
+        HStack {
+          Button("Open panel") { lab.toggleOpen() }
+          Button("Close") { lab.closeAll() }
+        }
+      }
+      Section {
+        Text(
+          """
+          Here: hold Space to dictate, hold A for agent mode into the selected thread, O opens, Esc closes.
+          Anywhere: hold right ⌥ to dictate, right ⌘ for agent mode (needs Accessibility for the terminal).
+          Hover the notch to peek; click it to open. In the list: ↑ ↓ and Return open a thread. In a thread: Esc or ⌘[ goes back, ⌘O hands off to the main window, ⌘↩ allow, ⌘⌫ deny.
+          An approval card in the closed notch: click Allow or Deny, or ⌥↩ and ⌥⎋ from any app. Hold A or right ⌘ while it shows to deny it by voice.
+          """
+        )
+        .font(.callout).foregroundStyle(.secondary)
+      }
+  }
+
+  private var simulatedHeight: Binding<SimulatedHeight> {
+    Binding(
+      get: { lab.simulatedHeight },
+      set: {
+        lab.simulatedHeight = $0
+        lab.onLayoutChange?()
+      })
+  }
+}
