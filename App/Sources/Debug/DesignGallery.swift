@@ -318,14 +318,19 @@
             StatusIcon(.attention)
           }
         }
-        SectionHeader(title: "Sidebar notice", detail: "Update ready, update available")
+        SectionHeader(
+          title: "Sidebar notice", detail: "Update ready, update available, at the sidebar's width")
         SidebarFooter {
           SidebarNotice(
-            "Restart to Update", detail: "1.4.0", systemImage: "arrow.clockwise.circle.fill", action: {})
+            "Restart to Update", detail: "Version 1.4.0", systemImage: "arrow.clockwise.circle.fill",
+            action: {})
           SidebarNotice(
-            "Update Available", detail: "1.4.0", systemImage: "arrow.down.circle.fill", action: {})
+            "Update Available", detail: "Version 1.10.12", systemImage: "arrow.down.circle.fill", action: {})
+        } content: {
           SidebarRow("Settings", systemImage: "gearshape", isSelected: false, action: {})
         }
+        // The main window's sidebar column width, so a notice that overflows it truncates here too.
+        .frame(width: 200)
       }
     }
   }
