@@ -210,14 +210,9 @@ private struct ThreadFooter: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       if case .needsYou(let approval) = thread.state {
-        ApprovalCard(approval: approval) {
-          lab.deny(thread.id)
-        } allowAlways: {
-          lab.approve(thread.id, always: true)
-        } allow: {
-          lab.approve(thread.id)
-        }
-        .transition(.blurReplace)
+        ApprovalCard(
+          lab: lab, thread: thread, approval: approval, focused: !lab.passive, front: true, showsThread: false)
+          .transition(.blurReplace)
       }
       ReplyBox(lab: lab, thread: thread, focused: $replyFocused)
     }
@@ -382,36 +377,6 @@ private struct ToolSteps: View {
 
 // MARK: - Approval and reply
 
-private struct ApprovalCard: View {
-  let approval: Approval
-  let deny: () -> Void
-  let allowAlways: () -> Void
-  let allow: () -> Void
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text(approval.title).font(Tokens.label).foregroundStyle(.white)
-      Text(approval.command)
-        .font(.system(size: 11).monospaced())
-        .foregroundStyle(.white.opacity(0.85))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.white.opacity(0.06)))
-      HStack(spacing: 6) {
-        Spacer()
-        PillButton(title: "Deny", hint: "⌘⌫", prominent: false, action: deny)
-          .keyboardShortcut(.delete, modifiers: .command)
-        PillButton(title: "Allow for this thread", hint: nil, prominent: false, action: allowAlways)
-        PillButton(title: "Allow", hint: "⌘↩", prominent: true, action: allow)
-          .keyboardShortcut(.return, modifiers: .command)
-      }
-    }
-    .padding(10)
-    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.06)))
-  }
-}
-
 private struct ReplyBox: View {
   @Bindable var lab: Lab
   let thread: AgentThread
@@ -426,7 +391,7 @@ private struct ReplyBox: View {
       } else {
         TextField(
           text: $lab.reply,
-          prompt: Text("Reply to \(thread.title)").foregroundStyle(.white.opacity(0.5))
+          prompt: Text(placeholder).foregroundStyle(.white.opacity(0.5))
         ) {
           Text("Reply")
         }
@@ -473,28 +438,11 @@ private struct ReplyBox: View {
     if case .recording(let id) = lab.dictation, id == thread.id { return true }
     return false
   }
-}
 
-private struct PillButton: View {
-  let title: String
-  let hint: String?
-  let prominent: Bool
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      HStack(spacing: 4) {
-        Text(title)
-        if let hint { Text(hint).opacity(0.55) }
-      }
-      .font(.system(size: 11, weight: .medium))
-      .foregroundStyle(prominent ? Color.black : .white)
-      .padding(.horizontal, 10)
-      .frame(height: 24)
-      .background(Capsule().fill(prominent ? Color.white : Color.white.opacity(0.12)))
-      .contentShape(Capsule())
-    }
-    .buttonStyle(PressStyle())
+  /// Sending while an approval waits denies it and passes the text on as the reason.
+  private var placeholder: String {
+    if case .needsYou = thread.state { return "Deny and say why" }
+    return "Reply to \(thread.title)"
   }
 }
 

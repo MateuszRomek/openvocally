@@ -22,6 +22,12 @@ import SwiftUI
   var showTarget = true
   var slowMotion = false
   var reduceMotion = false
+  var arrival: ApprovalArrival = .card
+  var approvalQueue: ApprovalQueue = .oneAtATime
+  var commandLength: CommandLength = .full
+  var allowPlacement: AllowPlacement = .button
+  var cardLinger: CardLinger = .untilAnswered
+  var voiceTarget: VoiceTarget = .card
 
   // Scene
   var threads: [AgentThread] = Lab.seed()
@@ -35,6 +41,14 @@ import SwiftUI
   private(set) var openScreen: ScreenID?
   private(set) var openLevel: Level = .idle
   var pointerScreen: ScreenID?
+  /// Threads waiting on an approval, oldest request first.
+  private(set) var approvalOrder: [Int] = []
+  /// Approvals the notch shrank back to the Needs you mark. They are still pending.
+  private(set) var collapsedCards: Set<Int> = []
+  /// The card shown when the queue shows one at a time.
+  var cardIndex = 0
+  /// A key answer arrived while no card was on screen, so the card came back first.
+  private(set) var keyRevealed = false
 
   /// The motion of the latest change, which the shape's reveal follows. Nil for changes that
   /// follow a key press and must not animate.
@@ -51,6 +65,8 @@ import SwiftUI
   @ObservationIgnored private var afterApproval: [Int: Turn] = [:]
   @ObservationIgnored private var nextMessageID = 1000
   @ObservationIgnored private var peekedThread: Int?
+  /// Threads opened while the panel was open; closing the panel shrinks their cards away.
+  @ObservationIgnored private var viewedThisOpen: Set<Int> = []
 
   // MARK: Derived
 
@@ -62,9 +78,40 @@ import SwiftUI
   }
 
   /// The thread the closed notch speaks for, when dictation is not using it.
-  var primaryThread: AgentThread? { attentionThreads.first }
+  /// With an approval card showing, that is the card's thread, so the glyph beside the camera
+  /// matches the card below it.
+  var primaryThread: AgentThread? {
+    if showsCard, let front = thread(frontApproval) { return front }
+    return attentionThreads.first
+  }
 
   func thread(_ id: Int?) -> AgentThread? { threads.first { $0.id == id } }
+
+  /// The pending approvals the notch still shows as cards.
+  var cardThreads: [Int] { approvalOrder.filter { !collapsedCards.contains($0) } }
+
+  var frontApproval: Int? {
+    let ids = cardThreads
+    return ids.isEmpty ? nil : ids[min(cardIndex, ids.count - 1)]
+  }
+
+  /// Whether the closed notch grows into the approval card. Plain dictation keeps the notch to
+  /// itself, so a card that arrives mid-sentence waits until the text is pasted.
+  var showsCard: Bool {
+    guard arrival != .mark || keyRevealed, let front = frontApproval else { return false }
+    switch dictation {
+    case .off: return true
+    case .recording(let id): return id == front
+    default: return false
+    }
+  }
+
+  /// Where agent mode sends speech: the open thread, else the card's thread, else the selection.
+  var agentTarget: Int? {
+    if let openThread { return openThread }
+    if voiceTarget == .card, openLevel == .idle, showsCard, let front = frontApproval { return front }
+    return selectedThread ?? threads.first?.id
+  }
 
   /// The open shape is wider once you are inside a thread, so the growth says where you went.
   var panelWidth: CGFloat {
@@ -88,6 +135,7 @@ import SwiftUI
   func level(on screen: NSScreen) -> Level {
     if openScreen == screen.screenID, openLevel != .idle { return openLevel }
     guard shows(on: screen) else { return .idle }
+    if showsCard { return .approval }
     return dictation != .off || primaryThread != nil ? .status : .idle
   }
 
@@ -104,7 +152,8 @@ import SwiftUI
 
   // MARK: Opening
 
-  func open(_ level: Level, on screen: ScreenID, fromKeyboard: Bool = false) {
+  /// `thread` opens the panel straight into that thread, for a click on its approval card.
+  func open(_ level: Level, on screen: ScreenID, fromKeyboard: Bool = false, thread: Int? = nil) {
     guard openScreen != screen || openLevel != level else { return }
     let growing = level == .expanded || (level == .peek && openLevel == .idle)
     let wasExpanded = openLevel == .expanded
@@ -115,7 +164,12 @@ import SwiftUI
       openScreen = level == .idle ? nil : screen
       openLevel = level
       // Opening lands on the thread the closed notch was speaking for, at list depth.
-      if level == .expanded, !wasExpanded {
+      if level == .expanded, !wasExpanded, let thread {
+        selectedThread = thread
+        openThread = panelLayout == .drillIn ? thread : nil
+        viewedThisOpen.insert(thread)
+        markSeen(thread)
+      } else if level == .expanded, !wasExpanded {
         selectedThread = primaryThread?.id ?? selectedThread ?? threads.first?.id
         // With one thread asking for attention there is nothing to choose, so open it directly.
         openThread = panelLayout == .drillIn && attentionThreads.count == 1 ? primaryThread?.id : nil
@@ -128,7 +182,11 @@ import SwiftUI
   func closeAll(fromKeyboard: Bool = false) {
     guard openScreen != nil else { return }
     if openLevel == .peek { markPeekSeen() }
+    let viewed = viewedThisOpen.intersection(approvalOrder)
+    viewedThisOpen = []
     animate(fromKeyboard ? Tokens.instant : Tokens.close) {
+      // You looked at these in the panel, so the notch doesn't grow them back as you close it.
+      collapsedCards.formUnion(viewed)
       openScreen = nil
       openLevel = .idle
       openThread = nil
@@ -149,6 +207,7 @@ import SwiftUI
   /// Opens the panel straight into one thread, for a click on the closed notch's thread.
   func show(thread id: Int) {
     selectedThread = id
+    viewedThisOpen.insert(id)
     markSeen(id)
     animate(openMotion.animation) { openThread = id }
   }
@@ -173,7 +232,7 @@ import SwiftUI
     var transaction = Transaction(animation: nil)
     transaction.disablesAnimations = true
     withTransaction(transaction) {
-      dictation = .recording(thread: agentMode ? (openThread ?? selectedThread ?? threads.first?.id) : nil)
+      dictation = .recording(thread: agentMode ? agentTarget : nil)
     }
     startMeter()
   }
@@ -185,6 +244,15 @@ import SwiftUI
     speech = Task {
       try? await pause(0.45)
       guard !Task.isCancelled else { return }
+      if let target, approvalOrder.contains(target) {
+        // Voice never approves: speaking while an approval waits denies it, with what you said.
+        swap { dictation = .deniedWithReason(thread: target) }
+        deny(target, reason: Lab.spokenReason)
+        try? await pause(1.8)
+        guard !Task.isCancelled else { return }
+        animate(Tokens.hide) { dictation = .off }
+        return
+      }
       swap { dictation = target.map { .sent(thread: $0) } ?? .pasted }
       if let target { start(target, Lab.voiceTurn) }
       try? await pause(1.1)
@@ -251,7 +319,11 @@ import SwiftUI
       rest.approval = nil
       rest.steps = ["Ran \(approval.command)"]
       afterApproval[id] = rest
-      animate(Tokens.grow) { update(id) { $0.state = .needsYou(approval) } }
+      animate(openMotion.animation) {
+        update(id) { $0.state = .needsYou(approval) }
+        approvalOrder.append(id)
+      }
+      scheduleCollapse(id)
       return
     }
     try? await pause(0.9)
@@ -282,27 +354,81 @@ import SwiftUI
   }
 
   func approve(_ id: Int, always: Bool = false) {
-    guard var rest = afterApproval.removeValue(forKey: id) else { return }
-    swap { append(id, .tool, always ? "Allowed for this thread" : "Allowed once") }
+    guard approvalOrder.contains(id) else { return }
+    var rest =
+      afterApproval.removeValue(forKey: id)
+      ?? Turn(prompt: nil, steps: [], approval: nil, reply: "Done.", end: .done("Done"))
+    animate(Tokens.close) {
+      settle(id)
+      append(id, .tool, always ? "Allowed for this thread" : "Allowed once")
+    }
     rest.prompt = nil
     start(id, rest)
   }
 
-  func deny(_ id: Int) {
+  /// `reason` is what you typed or said instead of answering; the agent gets it as the next message.
+  func deny(_ id: Int, reason: String? = nil) {
+    guard approvalOrder.contains(id) else { return }
     afterApproval[id] = nil
-    swap { append(id, .tool, "Denied") }
+    animate(Tokens.close) {
+      settle(id)
+      append(id, .tool, reason == nil ? "Denied" : "Denied, sent your reply as the reason")
+    }
     start(
       id,
       Turn(
-        prompt: nil, steps: [], approval: nil,
-        reply: "OK, I won't run it. Tell me how you'd like to check the change instead.",
+        prompt: reason, steps: [], approval: nil,
+        reply: reason == nil
+          ? "OK, I won't run it. Tell me how you'd like to check the change instead."
+          : "Understood. I won't run it, and I'll use `make test` instead.",
         end: .done("Waiting for you")))
+  }
+
+  /// ⌥↩ and ⌥⎋ from any app. They answer only a card you can see: with no card on screen, the
+  /// first press brings the oldest one back, so a key never approves something off screen.
+  func answerFromKeyboard(allow: Bool) {
+    guard !approvalOrder.isEmpty, openLevel == .idle else { return }
+    let hidden = !showsCard || (arrival == .peek && !keyRevealed)
+    if hidden {
+      animate(Tokens.instant) {
+        if let first = approvalOrder.first {
+          collapsedCards.remove(first)
+          cardIndex = cardThreads.firstIndex(of: first) ?? 0
+        }
+        keyRevealed = true
+      }
+      return
+    }
+    guard let front = frontApproval else { return }
+    allow ? approve(front) : deny(front)
+  }
+
+  private func settle(_ id: Int) {
+    approvalOrder.removeAll { $0 == id }
+    collapsedCards.remove(id)
+    cardIndex = min(cardIndex, max(cardThreads.count - 1, 0))
+    if approvalOrder.isEmpty { keyRevealed = false }
+  }
+
+  /// A peek line always shrinks back; a card does only when the lab says so.
+  private func scheduleCollapse(_ id: Int) {
+    let seconds: Double? = arrival == .peek ? 4 : cardLinger == .shrinks ? 8 : nil
+    guard let seconds, arrival != .mark else { return }
+    Task {
+      try? await pause(seconds)
+      guard approvalOrder.contains(id), !keyRevealed else { return }
+      animate(Tokens.close) { collapsedCards.insert(id) }
+    }
   }
 
   func sendReply() {
     guard let id = openThread ?? selectedThread, !reply.isEmpty else { return }
     let text = reply
     reply = ""
+    if approvalOrder.contains(id) {
+      deny(id, reason: text)
+      return
+    }
     start(
       id,
       Turn(
@@ -373,6 +499,9 @@ import SwiftUI
     case interrupt = "Needs you during dictation"
     case failed = "Thread fails"
     case many = "Eight threads, long names"
+    case threeApprovals = "Three approvals"
+    case longCommand = "Long command"
+    case riskyTail = "Risky tail"
     case reset = "Reset"
     var id: Self { self }
   }
@@ -413,6 +542,18 @@ import SwiftUI
           Turn(
             prompt: "Regenerate the appcast", steps: ["Ran make appcast"], approval: nil,
             reply: "codex exited with code 1: not logged in", end: .failed("Not logged in")))
+      case .threeApprovals:
+        start(1, Lab.testTurn)
+        try? await pause(0.6)
+        guard !Task.isCancelled else { return }
+        start(2, Lab.appcastTurn)
+        try? await pause(0.6)
+        guard !Task.isCancelled else { return }
+        start(3, Lab.siteTurn)
+      case .longCommand:
+        start(1, Lab.longTurn)
+      case .riskyTail:
+        start(2, Lab.tailTurn)
       case .many:
         reset()
         let extra: [(String, String, ThreadState)] = [
@@ -429,6 +570,7 @@ import SwiftUI
               state: item.2, messages: [Message(id: 500 + offset, role: .agent, text: "Working on it.")],
               updated: .now.addingTimeInterval(Double(-offset * 90))))
         }
+        approvalOrder.append(11)
         start(1, Lab.answerTurn)
       }
     }
@@ -438,6 +580,10 @@ import SwiftUI
     for turn in turns.values { turn.cancel() }
     turns = [:]
     afterApproval = [:]
+    approvalOrder = []
+    collapsedCards = []
+    cardIndex = 0
+    keyRevealed = false
     speech?.cancel()
     stopMeter()
     animate(Tokens.hide) {
@@ -450,7 +596,40 @@ import SwiftUI
 
   // MARK: Content
 
-  static let approval = Approval(title: "Run a command?", command: "swift test --filter Overlay")
+  static let approval = Approval(
+    title: "Run a command?", command: "swift test --filter Overlay",
+    reason: "Check the notch height fix against the overlay tests", detail: "~/dev/openvocally")
+
+  /// What the lab pretends you said while an approval waited.
+  static let spokenReason = "No, use make test, it sets up the fixtures."
+
+  static let longTurn = Turn(
+    prompt: "Run the overlay and paste tests in Xcode.",
+    steps: ["Read project.yml"],
+    approval: Approval(
+      title: "Run a command?",
+      command: """
+        xcodebuild test \\
+          -scheme OpenVocally \\
+          -configuration Debug \\
+          -derivedDataPath .build/xcode \\
+          -only-testing:OpenVocallyTests/OverlayTests \\
+          -only-testing:OpenVocallyTests/PasteControllerTests \\
+          -destination 'platform=macOS,arch=arm64' \\
+          2>&1 | tee .build/test.log | xcbeautify
+        """,
+      reason: "Run both suites the fix touches", detail: "~/dev/openvocally"),
+    reply: "Both suites pass: 18 overlay tests and 9 paste tests.", end: .done("Tests pass"))
+
+  /// A command whose dangerous part is at the end, where a one-line truncation hides it.
+  static let tailTurn = Turn(
+    prompt: "Install the release build so I can test the updater.",
+    steps: ["Read Makefile"],
+    approval: Approval(
+      title: "Run a command?",
+      command: "swift build -c release --product OpenVocally && cp -R .build/release/OpenVocally.app /Applications/ && rm -rf ~/Library/Application\\ Support/com.openvocally.app",
+      reason: "Start the updater test from a clean install", detail: "~/dev/openvocally"),
+    reply: "Installed. The app starts with no saved settings.", end: .done("Installed"))
 
   static let voiceTurn = Turn(
     prompt: "Run the tests again and fix what fails.",
@@ -482,12 +661,16 @@ import SwiftUI
 
   static let appcastTurn = Turn(
     prompt: "Publish the appcast for 1.0.4.",
-    steps: ["Read appcast.xml"], approval: Approval(title: "Push to origin?", command: "git push origin main"),
+    steps: ["Read appcast.xml"], approval: Approval(
+      title: "Run a command?", command: "git push origin main", reason: "Publish the 1.0.4 feed",
+      detail: "~/dev/openvocally"),
     reply: "Pushed. The feed now lists 1.0.4.", end: .done("Pushed"))
 
   static let siteTurn = Turn(
     prompt: "Tighten the hero copy.",
-    steps: ["Read index.html"], approval: Approval(title: "Edit a file outside the project?", command: "~/site/copy.md"),
+    steps: ["Read index.html"], approval: Approval(
+      kind: .edit, title: "Edit a file outside the project?", command: "~/site/copy.md",
+      reason: "The hero copy lives in the site folder", detail: "+12 −4"),
     reply: "Shortened the headline to six words and cut the second paragraph.", end: .done("Copy updated"))
 
   static func seed() -> [AgentThread] {

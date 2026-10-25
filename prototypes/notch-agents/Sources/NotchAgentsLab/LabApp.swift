@@ -54,6 +54,12 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
       NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
         MainActor.assumeIsolated { self?.handleFlags(event) }
       } as Any)
+    // ⌥↩ and ⌥⎋ answer an approval from any app. A global monitor can't swallow the key, so the
+    // frontmost app sees it too; the real app captures it only while an approval is pending.
+    monitors.append(
+      NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        MainActor.assumeIsolated { _ = self?.handleAnswerKey(event) }
+      } as Any)
   }
 
   /// `[--backdrop shoulders|shadow|pill] [--resting] [--preview] [--demo busy|needs|answer|many|failed|record|agent]
@@ -71,6 +77,18 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     if args.contains("--resting") { lab.idleOnNotchless = .resting }
     if args.contains("--preview") { lab.panelLayout = .preview }
     if args.contains("--passive") { lab.passive = true }
+    if let arrival = value("--arrival") { lab.arrival = ApprovalArrival.allCases.first { "\($0)" == arrival } ?? .card }
+    if let queue = value("--queue") { lab.approvalQueue = ApprovalQueue.allCases.first { "\($0)" == queue } ?? .oneAtATime }
+    if args.contains("--one-line") { lab.commandLength = .oneLine }
+    if args.contains("--everywhere") { lab.scope = .all }
+    // Holds agent mode once the cards are up, to show the card's voice-deny state.
+    if let delay = value("--speak-after").flatMap(Double.init) {
+      Task {
+        try? await Task.sleep(for: .seconds(delay))
+        lab.press(agentMode: true)
+      }
+    }
+    if args.contains("--allow-menu") { lab.allowPlacement = .menu }
     if let size = value("--size") { lab.threadSize = ThreadSize.allCases.first { "\($0)" == size } ?? .roomy }
     switch value("--demo") {
     case "busy": lab.play(.busy)
@@ -80,6 +98,9 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     case "failed": lab.play(.failed)
     case "record": lab.press(agentMode: false)
     case "agent": lab.press(agentMode: true)
+    case "approvals": lab.play(.threeApprovals)
+    case "long": lab.play(.longCommand)
+    case "tail": lab.play(.riskyTail)
     default: break
     }
     let thread = value("--thread").flatMap(Int.init)
@@ -92,6 +113,18 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     }
   }
 
+
+  /// ⌥↩ allows and ⌥⎋ denies the front approval card.
+  private func handleAnswerKey(_ event: NSEvent) -> Bool {
+    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock)
+    guard flags == .option, !event.isARepeat, !lab.approvalOrder.isEmpty else { return false }
+    switch event.keyCode {
+    case 36: lab.answerFromKeyboard(allow: true)
+    case 53: lab.answerFromKeyboard(allow: false)
+    default: return false
+    }
+    return true
+  }
 
   private func screensChanged() {
     stage?.rebuild()
@@ -120,6 +153,7 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
   /// pass through untouched.
   private func handleKey(_ event: NSEvent) -> Bool {
     guard !(event.window is NotchPanel) else { return false }
+    if event.type == .keyDown, handleAnswerKey(event) { return true }
     guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock).isEmpty
     else { return false }
     let key = event.charactersIgnoringModifiers ?? ""
@@ -189,6 +223,26 @@ private struct ControlPanel: View {
         Toggle("Slow motion (4× slower)", isOn: $lab.slowMotion)
         Toggle("Reduce Motion (no springs)", isOn: $lab.reduceMotion)
       }
+      Section("Approvals") {
+        Picker("When one arrives", selection: $lab.arrival) {
+          ForEach(ApprovalArrival.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Several at once", selection: $lab.approvalQueue) {
+          ForEach(ApprovalQueue.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Command", selection: $lab.commandLength) {
+          ForEach(CommandLength.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Allow for this thread", selection: $lab.allowPlacement) {
+          ForEach(AllowPlacement.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Card stays", selection: $lab.cardLinger) {
+          ForEach(CardLinger.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Agent mode speaks to", selection: $lab.voiceTarget) {
+          ForEach(VoiceTarget.allCases) { Text($0.rawValue).tag($0) }
+        }
+      }
       Section("Sequences") {
         HStack {
           ForEach(Lab.Scenario.allCases.prefix(4)) { scenario in
@@ -196,7 +250,12 @@ private struct ControlPanel: View {
           }
         }
         HStack {
-          ForEach(Lab.Scenario.allCases.dropFirst(4)) { scenario in
+          ForEach(Lab.Scenario.allCases.dropFirst(4).prefix(4)) { scenario in
+            Button(scenario.rawValue) { lab.play(scenario) }
+          }
+        }
+        HStack {
+          ForEach(Lab.Scenario.allCases.dropFirst(8)) { scenario in
             Button(scenario.rawValue) { lab.play(scenario) }
           }
         }
@@ -211,6 +270,7 @@ private struct ControlPanel: View {
           Here: hold Space to dictate, hold A for agent mode into the selected thread, O opens, Esc closes.
           Anywhere: hold right ⌥ to dictate, right ⌘ for agent mode (needs Accessibility for the terminal).
           Hover the notch to peek; click it to open. In the list: ↑ ↓ and Return open a thread. In a thread: Esc or ⌘[ goes back, ⌘O hands off to the main window, ⌘↩ allow, ⌘⌫ deny.
+          An approval card in the closed notch: click Allow or Deny, or ⌥↩ and ⌥⎋ from any app. Hold A or right ⌘ while it shows to deny it by voice.
           """
         )
         .font(.callout).foregroundStyle(.secondary)

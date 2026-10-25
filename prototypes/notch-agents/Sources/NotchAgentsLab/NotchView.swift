@@ -11,8 +11,11 @@ struct NotchRoot: View {
     let metrics = display.metrics
     let pill = !metrics.isReal && lab.backdrop == .pill
     VStack(spacing: 0) {
-      SurfaceView(lab: lab, metrics: metrics, level: lab.level(on: display.screen), pill: pill) {
-        lab.open(.expanded, on: display.screen.screenID)
+      let level = lab.level(on: display.screen)
+      SurfaceView(lab: lab, metrics: metrics, level: level, pill: pill) {
+        // A click on an approval card opens the thread that asked.
+        lab.open(
+          .expanded, on: display.screen.screenID, thread: level == .approval ? lab.frontApproval : nil)
       }
       .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { [display] rect in
         display.shapeRect = rect
@@ -56,6 +59,7 @@ struct SurfaceView: View {
         VStack(spacing: 0) {
           StatusRow(lab: lab, metrics: metrics, pill: pill)
           if let target = speakingTo { DropLine(text: "Speaking to \(target)") }
+          if case .deniedWithReason = lab.dictation { DropLine(text: "Denied. What you said went as the reason.") }
         }
         .transition(.blurReplace)
       case .peek:
@@ -63,6 +67,14 @@ struct SurfaceView: View {
           StatusRow(lab: lab, metrics: metrics, pill: pill)
           DropLine(text: peekText)
         }
+        .frame(minWidth: Tokens.peekWidth)
+        .transition(.blurReplace)
+      case .approval:
+        VStack(spacing: 0) {
+          StatusRow(lab: lab, metrics: metrics, pill: pill)
+          ApprovalStack(lab: lab)
+        }
+        .frame(width: lab.arrival == .peek && !lab.keyRevealed ? nil : Tokens.panelWidth)
         .frame(minWidth: Tokens.peekWidth)
         .transition(.blurReplace)
       case .expanded:
@@ -141,7 +153,7 @@ struct SurfaceView: View {
       if pill { return CGSize(width: 120, height: 32) }
       if !metrics.isReal, lab.idleOnNotchless == .resting { return notch }
       return CGSize(width: notch.width - 4, height: notch.height - 2)
-    case .status, .peek, .expanded:
+    case .status, .peek, .approval, .expanded:
       return pill
         ? CGSize(width: 120, height: 36)
         : CGSize(width: notch.width + 2 * Tokens.wing, height: notch.height)
@@ -153,6 +165,7 @@ struct SurfaceView: View {
       switch level {
       case .idle, .status: return SurfaceRadii(flare: 0, top: 18, bottom: 18)
       case .peek: return SurfaceRadii(flare: 0, top: 18, bottom: 20)
+      case .approval: return SurfaceRadii(flare: 0, top: 22, bottom: 24)
       case .expanded: return SurfaceRadii(flare: 0, top: 22, bottom: 26)
       }
     }
@@ -162,6 +175,7 @@ struct SurfaceView: View {
         ? SurfaceRadii(flare: 6, top: 0, bottom: 10) : SurfaceRadii(flare: 0, top: 0, bottom: 10)
     case .status: return SurfaceRadii(flare: 6, top: 0, bottom: 12)
     case .peek: return SurfaceRadii(flare: 10, top: 0, bottom: 20)
+    case .approval: return SurfaceRadii(flare: 12, top: 0, bottom: 24)
     case .expanded: return SurfaceRadii(flare: 14, top: 0, bottom: 26)
     }
   }
@@ -182,7 +196,7 @@ struct SurfaceView: View {
       }
     }
     switch thread.state {
-    case .needsYou(let approval): return "\(thread.title) wants to run \(approval.command)"
+    case .needsYou(let approval): return "\(thread.title) wants to \(approval.verbPhrase)"
     case .working(let step): return "\(thread.title) · \(step)"
     case .failed(let text): return "\(thread.title) · \(text)"
     case .done: return "\(thread.title) · \(thread.lastLine)"
@@ -233,6 +247,7 @@ struct StatusRow: View {
         tint: isRecording ? .white : .secondary)
     case .pasted: Glyph(symbol: "checkmark", tint: .white)
     case .sent: Glyph(symbol: "arrow.up", tint: .white)
+    case .deniedWithReason: Glyph(symbol: "xmark", tint: .white)
     case .off:
       if let thread = lab.primaryThread {
         Glyph(symbol: thread.provider.symbol, tint: .white).id(thread.id)
@@ -248,6 +263,7 @@ struct StatusRow: View {
     case .transcribing: Bars(levels: lab.levels, live: false)
     case .pasted: Word(text: "Pasted")
     case .sent: Word(text: "Sent")
+    case .deniedWithReason: Word(text: "Denied")
     case .off:
       if let thread = lab.primaryThread {
         HStack(spacing: 6) {

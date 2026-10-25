@@ -40,9 +40,29 @@ enum Provider: String, CaseIterable {
   }
 }
 
+enum ApprovalKind: Equatable {
+  case command
+  case edit
+  case fetch
+}
+
 struct Approval: Equatable {
+  var kind: ApprovalKind = .command
   var title: String
+  /// The exact command, path or URL, never shortened by the agent.
   var command: String
+  /// Why the agent wants it, when the provider says (Codex's `reason`, Claude's tool description).
+  var reason: String?
+  /// The working folder for a command, or the size of an edit.
+  var detail: String?
+
+  var verbPhrase: String {
+    switch kind {
+    case .command: "run \(command.split(separator: "\n").first ?? "")"
+    case .edit: "edit \(command)"
+    case .fetch: "fetch \(command)"
+    }
+  }
 }
 
 enum ThreadState: Equatable {
@@ -125,12 +145,16 @@ enum Dictation: Equatable {
   case transcribing(thread: Int?)
   case pasted
   case sent(thread: Int)
+  /// What was said while an approval waited went to the agent as the reason for denying it.
+  case deniedWithReason(thread: Int)
 }
 
 enum Level: Equatable {
   case idle
   case status
   case peek
+  /// An approval the notch grew to show on its own. Never takes keyboard focus.
+  case approval
   case expanded
 }
 
@@ -245,6 +269,46 @@ enum OpenMotion: String, CaseIterable, Identifiable {
     case .snappy: .spring(response: 0.3, dampingFraction: 0.9)
     }
   }
+}
+
+/// How the notch shows an approval that arrives while the panel is closed.
+enum ApprovalArrival: String, CaseIterable, Identifiable {
+  case mark = "Needs you mark only"
+  case peek = "One line for 4 s"
+  case card = "Card with buttons"
+  var id: Self { self }
+}
+
+enum ApprovalQueue: String, CaseIterable, Identifiable {
+  case oneAtATime = "One card, 1 of N"
+  case stacked = "Front card, the rest stacked"
+  case list = "Every card listed"
+  var id: Self { self }
+}
+
+enum CommandLength: String, CaseIterable, Identifiable {
+  case full = "In full, wrapped"
+  case oneLine = "One line, Show all"
+  var id: Self { self }
+}
+
+enum AllowPlacement: String, CaseIterable, Identifiable {
+  case button = "Its own button"
+  case menu = "Menu beside Allow"
+  var id: Self { self }
+}
+
+enum CardLinger: String, CaseIterable, Identifiable {
+  case untilAnswered = "Until answered"
+  case shrinks = "Shrinks to the mark after 8 s"
+  var id: Self { self }
+}
+
+/// Which thread agent mode speaks to while an approval card is showing.
+enum VoiceTarget: String, CaseIterable, Identifiable {
+  case card = "The thread on the card"
+  case selected = "The selected thread"
+  var id: Self { self }
 }
 
 // MARK: - Displays
