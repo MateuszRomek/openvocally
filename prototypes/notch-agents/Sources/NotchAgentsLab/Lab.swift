@@ -25,8 +25,8 @@ import SwiftUI
   var arrival: ApprovalArrival = .card
   var approvalQueue: ApprovalQueue = .oneAtATime
   var commandLength: CommandLength = .full
-  var allowPlacement: AllowPlacement = .button
-  var cardLinger: CardLinger = .untilAnswered
+  var allowPlacement: AllowPlacement = .menu
+  var cardLinger: CardLinger = .shrinks
   var voiceTarget: VoiceTarget = .card
 
   // Scene
