@@ -69,7 +69,7 @@ private struct CalmPrompt: View {
     Group {
       if isListening || lab.transcribingIntoCard {
         HStack(spacing: 8) {
-          Bars(levels: lab.levels, live: isListening)
+          Bars(levels: lab.levels, live: isListening, sweep: !isListening)
           Text(isListening ? "Listening" : "Transcribing")
             .font(.system(size: 15))
             .foregroundStyle(.white.opacity(0.55))

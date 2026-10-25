@@ -10,6 +10,8 @@ let package = Package(
   targets: [
     .executableTarget(
       name: "NotchAgentsLab",
+      // The app's menu bar logo, copied from App/Resources so the lab stays standalone.
+      resources: [.copy("Resources/logo.svg")],
       swiftSettings: [
         .treatAllWarnings(as: .error),
         .defaultIsolation(MainActor.self),

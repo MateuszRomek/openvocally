@@ -197,7 +197,11 @@ import SwiftUI
   // MARK: Opening
 
   /// `thread` opens the panel straight into that thread, for a click on its approval card.
-  func open(_ level: Level, on screen: ScreenID, fromKeyboard: Bool = false, thread: Int? = nil) {
+  /// `alongside` runs inside the open's own update, so what the new level needs appears with it.
+  func open(
+    _ level: Level, on screen: ScreenID, fromKeyboard: Bool = false, thread: Int? = nil,
+    alongside: () -> Void = {}
+  ) {
     guard openScreen != screen || openLevel != level else { return }
     let growing = level == .expanded || level == .start || (level == .peek && openLevel == .idle)
     let wasExpanded = openLevel == .expanded
@@ -205,6 +209,7 @@ import SwiftUI
     if openLevel == .peek { markPeekSeen() }
     if level == .peek { peekedThread = primaryThread?.id }
     animate(motion, levelChange: true) {
+      alongside()
       openScreen = level == .idle ? nil : screen
       openLevel = level
       // Opening lands on the thread the closed notch was speaking for, at list depth.
@@ -268,7 +273,8 @@ import SwiftUI
   // MARK: Dictation
 
   /// Hold to talk. Agent mode sends the speech to the selected thread instead of pasting it.
-  func press(agentMode: Bool) {
+  /// `newThread` is agent mode with no thread selected, which starts one.
+  func press(agentMode: Bool, newThread: Bool = false) {
     if case .recording = dictation { return }
     speech?.cancel()
     // Recording feedback never animates in: it follows a key press and happens many times a day.
@@ -276,8 +282,17 @@ import SwiftUI
     levelMotionUntil = .distantPast
     var transaction = Transaction(animation: nil)
     transaction.disablesAnimations = true
-    withTransaction(transaction) {
-      dictation = .recording(thread: agentMode ? agentTarget : nil)
+    let target = newThread ? Lab.newThreadTarget : agentMode ? agentTarget : nil
+    if target == Lab.newThreadTarget {
+      // Agent mode aimed at a new thread opens the card on the press itself, at keyboard speed,
+      // and listens inside it: the notch grows once, and the release only swaps Listening for the
+      // text. The card and the recording change in one update, so no status row shows first.
+      if openLevel != .start { openCard(fromKeyboard: true) }
+      dictation = .recording(thread: target)
+    } else {
+      withTransaction(transaction) {
+        dictation = .recording(thread: target)
+      }
     }
     startMeter()
   }
@@ -622,8 +637,7 @@ import SwiftUI
         start(1, Lab.longTurn)
       case .approvalDuringCard:
         // The card opens, then a running thread asks for approval while you're still in it.
-        newThreadArmed = true
-        press(agentMode: true)
+        press(agentMode: true, newThread: true)
         try? await pause(1.8)
         guard !Task.isCancelled else { return }
         release()
@@ -632,8 +646,7 @@ import SwiftUI
         start(1, Lab.testTurn)
       case .speakNew, .speakAgain:
         // Agent mode with a new thread as the target: hold, talk, release.
-        if scenario == .speakNew, openLevel != .start { newThreadArmed = true }
-        press(agentMode: true)
+        press(agentMode: true, newThread: true)
         try? await pause(1.8)
         guard !Task.isCancelled else { return }
         release()

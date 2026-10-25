@@ -228,7 +228,6 @@ extension Lab {
   }
 
   func openCard(fromKeyboard: Bool, on screen: ScreenID? = nil) {
-    if draft == nil { draft = StartDraft(settings: lastSettings) }
     openControl = nil
     focusedControl = nil
     filter = ""
@@ -236,7 +235,9 @@ extension Lab {
     cardKeys = 0
     newThreadArmed = false
     let main = NSScreen.main?.screenID ?? 0
-    open(.start, on: screen ?? (scope == .main ? main : pointerScreen ?? main), fromKeyboard: fromKeyboard)
+    open(.start, on: screen ?? (scope == .main ? main : pointerScreen ?? main), fromKeyboard: fromKeyboard) {
+      if draft == nil { draft = StartDraft(settings: lastSettings) }
+    }
   }
 
   /// Clicking into another app. A card with nothing in it isn't worth keeping.
@@ -628,7 +629,7 @@ private struct PromptBox: View {
     Group {
       if isListening || lab.transcribingIntoCard {
         HStack(spacing: 8) {
-          Bars(levels: lab.levels, live: isListening)
+          Bars(levels: lab.levels, live: isListening, sweep: !isListening)
           Text(!isListening ? "Transcribing" : draft.prompt.isEmpty ? "Listening" : listeningNote)
             .font(Tokens.label)
             .foregroundStyle(.white.opacity(0.75))

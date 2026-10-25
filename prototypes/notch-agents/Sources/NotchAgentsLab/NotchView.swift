@@ -256,7 +256,34 @@ struct StatusRow: View {
     .padding(.horizontal, pill ? 6 : 0)
   }
 
+  /// While the start card is open, the row belongs to it: the app's mark and the project. Its
+  /// voice feedback lives in the card's prompt, so the row never shows a second meter. Plain
+  /// dictation into the card's field still shows here, as it does over any app.
+  private var cardOwnsRow: Bool {
+    guard lab.openLevel == .start else { return false }
+    switch lab.dictation {
+    case .recording(nil), .transcribing(nil), .pasted: return false
+    default: return true
+    }
+  }
+
   @ViewBuilder private var leading: some View {
+    if cardOwnsRow {
+      if !lab.approvalOrder.isEmpty {
+        // An approval waits until the card closes; the camera's side says one is there.
+        HStack(spacing: 4) {
+          StateMark(state: .needsYou(Lab.approval), indicator: lab.working, showsWord: false)
+          Badge(count: lab.approvalOrder.count)
+        }
+      } else {
+        AppMark()
+      }
+    } else {
+      plainLeading
+    }
+  }
+
+  @ViewBuilder private var plainLeading: some View {
     switch lab.dictation {
     case .recording(let thread), .transcribing(let thread):
       Glyph(symbol: symbol(for: thread), tint: isRecording ? .white : .secondary)
@@ -265,27 +292,31 @@ struct StatusRow: View {
     case .discarded: Glyph(symbol: "xmark", tint: .white)
     case .deniedWithReason: Glyph(symbol: "xmark", tint: .white)
     case .off:
-      if lab.openLevel == .start, !lab.approvalOrder.isEmpty {
-        // An approval waits until the card closes; the camera's side says one is there.
-        HStack(spacing: 4) {
-          StateMark(state: .needsYou(Lab.approval), indicator: lab.working, showsWord: false)
-          Badge(count: lab.approvalOrder.count)
-        }
-      } else if lab.openLevel == .start, let draft = lab.draft {
-        Glyph(symbol: draft.settings.provider.symbol, tint: .white).id(draft.settings.provider)
-      } else if let thread = lab.primaryThread {
+      if let thread = lab.primaryThread {
         Glyph(symbol: thread.provider.symbol, tint: .white).id(thread.id)
       } else if lab.draft != nil {
         Glyph(symbol: "square.and.pencil", tint: .white)
       } else if lab.newThreadArmed {
         Glyph(symbol: "plus", tint: .white)
       } else {
-        Glyph(symbol: "waveform", tint: .secondary)
+        AppMark().opacity(0.6)
       }
     }
   }
 
   @ViewBuilder private var trailing: some View {
+    if cardOwnsRow, let draft = lab.draft {
+      if lab.cardLook == .calm {
+        CalmHeader(lab: lab, project: draft.settings.project)
+      } else {
+        Word(text: "New thread")
+      }
+    } else {
+      plainTrailing
+    }
+  }
+
+  @ViewBuilder private var plainTrailing: some View {
     switch lab.dictation {
     case .recording: Bars(levels: lab.levels, live: true)
     case .transcribing: Bars(levels: lab.levels, live: false)
@@ -446,16 +477,62 @@ struct WorkingMark: View {
 struct Bars: View {
   let levels: [CGFloat]
   let live: Bool
+  /// A wave travelling across the bars while speech turns into text, as the app's overlay does
+  /// (`Bars.sweep` in the Overlay module): work in progress, never a frozen or empty meter.
+  var sweep = false
 
   var body: some View {
+    if sweep, !live {
+      TimelineView(.animation) { context in
+        row(heights: Self.sweep(count: levels.count, time: context.date.timeIntervalSinceReferenceDate))
+      }
+      .transition(.blurReplace)
+    } else {
+      row(heights: levels.map { live ? Double($0) : 0 })
+        .transition(.blurReplace)
+    }
+  }
+
+  private func row(heights: [Double]) -> some View {
     HStack(spacing: 2) {
-      ForEach(levels.indices, id: \.self) { index in
+      ForEach(heights.indices, id: \.self) { index in
         Capsule()
-          .fill(Color.white.opacity(live ? 1 : 0.45))
-          .frame(width: 2, height: live ? 3 + 13 * levels[index] : 3)
+          .fill(Color.white.opacity(live ? 1 : sweep ? 0.8 : 0.45))
+          .frame(width: 2, height: 3 + 13 * heights[index])
       }
     }
     .frame(height: 16)
+  }
+
+  private static func sweep(count: Int, time: TimeInterval) -> [Double] {
+    (0..<count).map { index in
+      let phase = Double(index) / Double(count) - time
+      let wave = 0.5 + 0.5 * cos(2 * Double.pi * phase)
+      return 0.1 + 0.6 * wave * wave
+    }
+  }
+}
+
+/// OpenVocally's own mark, the ring from the menu bar, for the notch's app-level states.
+struct AppMark: View {
+  private static let image: NSImage? = {
+    guard let url = Bundle.module.url(forResource: "logo", withExtension: "svg"),
+      let image = NSImage(contentsOf: url)
+    else { return nil }
+    image.isTemplate = true
+    return image
+  }()
+
+  var body: some View {
+    Group {
+      if let image = Self.image {
+        Image(nsImage: image).resizable().scaledToFit()
+      } else {
+        Image(systemName: "circle")
+      }
+    }
+    .foregroundStyle(.white)
+    .frame(width: 14, height: 14)
     .transition(.blurReplace)
   }
 }
