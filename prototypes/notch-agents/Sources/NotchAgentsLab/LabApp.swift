@@ -89,6 +89,18 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
       }
     }
     if args.contains("--allow-menu") { lab.allowPlacement = .menu }
+    if args.contains("--all-questions") { lab.questionLayout = .all }
+    if args.contains("--chips") { lab.optionStyle = .chips }
+    if args.contains("--click-only") { lab.optionKeys = .none }
+    if args.contains("--lasting-first") { lab.lastingFirst = .lasting }
+    if args.contains("--form-panel") { lab.formPlacement = .panel }
+    // Picks an option a moment after the cards are up, to show a picked state.
+    if let delay = value("--pick-after").flatMap(Double.init) {
+      Task {
+        try? await Task.sleep(for: .seconds(delay))
+        if let front = lab.frontApproval { lab.pick(front, question: lab.currentQuestion(front), option: 0) }
+      }
+    }
     if let size = value("--size") { lab.threadSize = ThreadSize.allCases.first { "\($0)" == size } ?? .roomy }
     switch value("--demo") {
     case "busy": lab.play(.busy)
@@ -101,6 +113,13 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     case "approvals": lab.play(.threeApprovals)
     case "long": lab.play(.longCommand)
     case "tail": lab.play(.riskyTail)
+    case "question": lab.play(.question)
+    case "questions": lab.play(.questions)
+    case "browser": lab.play(.browser)
+    case "app": lab.play(.app)
+    case "form": lab.play(.form)
+    case "link": lab.play(.link)
+    case "mixed": lab.play(.mixed)
     default: break
     }
     let thread = value("--thread").flatMap(Int.init)
@@ -114,10 +133,13 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
   }
 
 
-  /// ⌥↩ allows and ⌥⎋ denies the front approval card.
+  /// ⌥↩ allows and ⌥⎋ denies the front approval card; ⌥1–⌥9 pick an option on a question card.
   private func handleAnswerKey(_ event: NSEvent) -> Bool {
     let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock)
     guard flags == .option, !event.isARepeat, !lab.approvalOrder.isEmpty else { return false }
+    // Key codes for 1–9 on the top row, which ⌥ turns into symbols, so read the code.
+    let digits: [UInt16: Int] = [18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9]
+    if let number = digits[event.keyCode] { return lab.pickFromKeyboard(number) }
     switch event.keyCode {
     case 36: lab.answerFromKeyboard(allow: true)
     case 53: lab.answerFromKeyboard(allow: false)
@@ -243,6 +265,28 @@ private struct ControlPanel: View {
           ForEach(VoiceTarget.allCases) { Text($0.rawValue).tag($0) }
         }
       }
+      Section("Questions") {
+        Picker("Several questions", selection: $lab.questionLayout) {
+          ForEach(QuestionLayout.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Options", selection: $lab.optionStyle) {
+          ForEach(OptionStyle.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Number keys", selection: $lab.optionKeys) {
+          ForEach(OptionKeys.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("Question card stays", selection: $lab.questionLinger) {
+          ForEach(QuestionLinger.allCases) { Text($0.rawValue).tag($0) }
+        }
+      }
+      Section("Browser, Computer Use and MCP") {
+        Picker("Allow button", selection: $lab.lastingFirst) {
+          ForEach(LastingFirst.allCases) { Text($0.rawValue).tag($0) }
+        }
+        Picker("MCP form", selection: $lab.formPlacement) {
+          ForEach(FormPlacement.allCases) { Text($0.rawValue).tag($0) }
+        }
+      }
       Section("Sequences") {
         HStack {
           ForEach(Lab.Scenario.allCases.prefix(4)) { scenario in
@@ -255,7 +299,17 @@ private struct ControlPanel: View {
           }
         }
         HStack {
-          ForEach(Lab.Scenario.allCases.dropFirst(8)) { scenario in
+          ForEach(Lab.Scenario.allCases.dropFirst(8).prefix(4)) { scenario in
+            Button(scenario.rawValue) { lab.play(scenario) }
+          }
+        }
+        HStack {
+          ForEach(Lab.Scenario.allCases.dropFirst(12).prefix(4)) { scenario in
+            Button(scenario.rawValue) { lab.play(scenario) }
+          }
+        }
+        HStack {
+          ForEach(Lab.Scenario.allCases.dropFirst(16)) { scenario in
             Button(scenario.rawValue) { lab.play(scenario) }
           }
         }

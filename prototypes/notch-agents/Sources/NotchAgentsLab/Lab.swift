@@ -28,6 +28,12 @@ import SwiftUI
   var allowPlacement: AllowPlacement = .menu
   var cardLinger: CardLinger = .shrinks
   var voiceTarget: VoiceTarget = .card
+  var questionLayout: QuestionLayout = .stepped
+  var optionStyle: OptionStyle = .rows
+  var optionKeys: OptionKeys = .option
+  var questionLinger: QuestionLinger = .untilAnswered
+  var lastingFirst: LastingFirst = .once
+  var formPlacement: FormPlacement = .choicesInline
 
   // Scene
   var threads: [AgentThread] = Lab.seed()
@@ -49,6 +55,14 @@ import SwiftUI
   var cardIndex = 0
   /// A key answer arrived while no card was on screen, so the card came back first.
   private(set) var keyRevealed = false
+  /// The question each card shows when questions come one at a time.
+  var questionStep: [Int: Int] = [:]
+  /// Picked options per thread, by question index.
+  var picks: [Int: [Int: Set<Int>]] = [:]
+  /// Form values per thread, by field index.
+  var formValues: [Int: [Int: String]] = [:]
+  /// Sign-in links you opened, waiting for the server to say you finished.
+  private(set) var linksOpened: Set<Int> = []
 
   /// The motion of the latest change, which the shape's reveal follows. Nil for changes that
   /// follow a key press and must not animate.
@@ -244,6 +258,15 @@ import SwiftUI
     speech = Task {
       try? await pause(0.45)
       guard !Task.isCancelled else { return }
+      if let target, approvalOrder.contains(target), pendingApproval(target)?.isQuestion == true {
+        // Speech is the free-text answer to the question on screen, sent word for word.
+        swap { dictation = .answeredBySpeech(thread: target) }
+        answerByText(target, Lab.spokenAnswer)
+        try? await pause(1.8)
+        guard !Task.isCancelled else { return }
+        animate(Tokens.hide) { dictation = .off }
+        return
+      }
       if let target, approvalOrder.contains(target) {
         // Voice never approves: speaking while an approval waits denies it, with what you said.
         swap { dictation = .deniedWithReason(thread: target) }
@@ -317,7 +340,7 @@ import SwiftUI
       var rest = turn
       rest.prompt = nil
       rest.approval = nil
-      rest.steps = ["Ran \(approval.command)"]
+      rest.steps = Lab.stepAfter(approval)
       afterApproval[id] = rest
       animate(openMotion.animation) {
         update(id) { $0.state = .needsYou(approval) }
@@ -353,17 +376,141 @@ import SwiftUI
     }
   }
 
-  func approve(_ id: Int, always: Bool = false) {
+  func approve(_ id: Int, grant: Grant = .once) {
+    finish(id, record: grant.record)
+  }
+
+  /// Answers the request and lets the thread carry on with the rest of its turn.
+  private func finish(_ id: Int, record: String) {
     guard approvalOrder.contains(id) else { return }
     var rest =
       afterApproval.removeValue(forKey: id)
       ?? Turn(prompt: nil, steps: [], approval: nil, reply: "Done.", end: .done("Done"))
     animate(Tokens.close) {
       settle(id)
-      append(id, .tool, always ? "Allowed for this thread" : "Allowed once")
+      append(id, .tool, record)
     }
     rest.prompt = nil
     start(id, rest)
+  }
+
+  func pendingApproval(_ id: Int?) -> Approval? {
+    if let thread = thread(id), case .needsYou(let approval) = thread.state { return approval }
+    return nil
+  }
+
+  // MARK: Questions
+
+  /// The question a card shows now. With every question on the card, it is the first unanswered.
+  func currentQuestion(_ id: Int) -> Int {
+    let count = pendingApproval(id)?.questions.count ?? 0
+    return min(questionStep[id] ?? 0, max(count - 1, 0))
+  }
+
+  func isPicked(_ id: Int, question: Int, option: Int) -> Bool {
+    picks[id]?[question]?.contains(option) ?? false
+  }
+
+  /// A click or ⌥ digit. A single-select pick answers its question at once and moves on.
+  func pick(_ id: Int, question: Int, option: Int) {
+    guard let questions = pendingApproval(id)?.questions, questions.indices.contains(question) else { return }
+    var chosen = picks[id]?[question] ?? []
+    if questions[question].multiSelect {
+      if chosen.contains(option) { chosen.remove(option) } else { chosen.insert(option) }
+      animate(Tokens.swap) { picks[id, default: [:]][question] = chosen }
+      return
+    }
+    animate(Tokens.swap) { picks[id, default: [:]][question] = [option] }
+    advance(id, from: question)
+  }
+
+  /// Next for a multi-select question, or Submit once every question has an answer.
+  func advance(_ id: Int, from question: Int) {
+    guard let questions = pendingApproval(id)?.questions else { return }
+    let answered = questions.indices.allSatisfy { !(picks[id]?[$0] ?? []).isEmpty }
+    if questionLayout == .stepped, question < questions.count - 1 {
+      animate(Tokens.swap) { questionStep[id] = question + 1 }
+    } else if answered {
+      submitQuestions(id)
+    }
+  }
+
+  func stepQuestion(_ id: Int, by offset: Int) {
+    let count = pendingApproval(id)?.questions.count ?? 0
+    animate(Tokens.swap) { questionStep[id] = min(max(currentQuestion(id) + offset, 0), count - 1) }
+  }
+
+  func canSubmit(_ id: Int) -> Bool {
+    guard let questions = pendingApproval(id)?.questions else { return false }
+    return questions.indices.allSatisfy { !(picks[id]?[$0] ?? []).isEmpty }
+  }
+
+  func submitQuestions(_ id: Int) {
+    guard let questions = pendingApproval(id)?.questions else { return }
+    let labels = questions.indices.flatMap { index in
+      (picks[id]?[index] ?? []).sorted().map { questions[index].options[$0].label }
+    }
+    finish(id, record: "Answered: \(labels.joined(separator: ", "))")
+  }
+
+  /// Speech or a typed reply answers the question on screen in your own words, and the
+  /// questions after it stay unanswered, so the agent asks again if it still needs them.
+  func answerByText(_ id: Int, _ text: String) {
+    guard approvalOrder.contains(id) else { return }
+    afterApproval[id] = nil
+    animate(Tokens.close) {
+      settle(id)
+      append(id, .tool, "Answered in your words")
+    }
+    start(
+      id,
+      Turn(
+        prompt: text, steps: ["Edited ShortcutSettings.swift"], approval: nil,
+        reply: "Kept ⌥F as the toggle and added a note in the release notes. I'll remove the old shortcut in 1.1.",
+        end: .done("Answered")))
+  }
+
+  /// Skip declines the question; the agent carries on without an answer.
+  func skip(_ id: Int) {
+    guard approvalOrder.contains(id) else { return }
+    afterApproval[id] = nil
+    animate(Tokens.close) {
+      settle(id)
+      append(id, .tool, "Skipped the question")
+    }
+    start(
+      id,
+      Turn(
+        prompt: nil, steps: [], approval: nil,
+        reply: "No problem. I went with the first option for now; tell me if you want it changed.",
+        end: .done("Waiting for you")))
+  }
+
+  // MARK: Forms and links
+
+  func setField(_ id: Int, field: Int, value: String) {
+    animate(Tokens.swap) { formValues[id, default: [:]][field] = value }
+  }
+
+  func canSubmitForm(_ id: Int) -> Bool {
+    guard case .form(_, let fields) = pendingApproval(id)?.kind else { return false }
+    return fields.indices.allSatisfy { !fields[$0].required || !(formValues[id]?[$0] ?? "").isEmpty }
+  }
+
+  func submitForm(_ id: Int) {
+    guard canSubmitForm(id) else { return }
+    finish(id, record: "Sent the form")
+  }
+
+  /// Opening the link answers nothing yet: the server says when you finished in the browser.
+  func openLink(_ id: Int) {
+    guard approvalOrder.contains(id), !linksOpened.contains(id) else { return }
+    animate(Tokens.swap) { _ = linksOpened.insert(id) }
+    Task {
+      try? await pause(3)
+      guard linksOpened.contains(id) else { return }
+      finish(id, record: "Signed in")
+    }
   }
 
   /// `reason` is what you typed or said instead of answering; the agent gets it as the next message.
@@ -399,11 +546,46 @@ import SwiftUI
       }
       return
     }
-    guard let front = frontApproval else { return }
-    allow ? approve(front) : deny(front)
+    guard let front = frontApproval, let approval = pendingApproval(front) else { return }
+    switch approval.kind {
+    case .questions:
+      if allow { if canSubmit(front) { submitQuestions(front) } } else { skip(front) }
+    case .form:
+      if allow { submitForm(front) } else { deny(front) }
+    case .link:
+      if allow { openLink(front) } else { deny(front) }
+    case .browser, .app:
+      allow ? approve(front, grant: primaryGrant(approval)) : deny(front)
+    case .command, .edit, .fetch:
+      allow ? approve(front) : deny(front)
+    }
+  }
+
+  /// What the Allow button gives. Browser and Computer Use ask again on every action unless the
+  /// answer lasts, so the lab can put the lasting grant first.
+  func primaryGrant(_ approval: Approval) -> Grant {
+    switch approval.kind {
+    case .browser, .app: lastingFirst == .lasting ? approval.grants[1] : .once
+    default: .once
+    }
+  }
+
+  /// ⌥1–⌥9 from any app pick an option on the question card on screen, never a hidden one.
+  func pickFromKeyboard(_ number: Int) -> Bool {
+    guard optionKeys == .option, openLevel == .idle, showsCard, let front = frontApproval,
+      let questions = pendingApproval(front)?.questions, !questions.isEmpty
+    else { return false }
+    let question = currentQuestion(front)
+    guard questions[question].options.indices.contains(number - 1) else { return false }
+    pick(front, question: question, option: number - 1)
+    return true
   }
 
   private func settle(_ id: Int) {
+    questionStep[id] = nil
+    picks[id] = nil
+    formValues[id] = nil
+    linksOpened.remove(id)
     approvalOrder.removeAll { $0 == id }
     collapsedCards.remove(id)
     cardIndex = min(cardIndex, max(cardThreads.count - 1, 0))
@@ -412,7 +594,8 @@ import SwiftUI
 
   /// A peek line always shrinks back; a card does only when the lab says so.
   private func scheduleCollapse(_ id: Int) {
-    let seconds: Double? = arrival == .peek ? 4 : cardLinger == .shrinks ? 8 : nil
+    let lingers = pendingApproval(id)?.isQuestion == true && questionLinger == .untilAnswered
+    let seconds: Double? = arrival == .peek ? 4 : cardLinger == .shrinks && !lingers ? 8 : nil
     guard let seconds, arrival != .mark else { return }
     Task {
       try? await pause(seconds)
@@ -426,7 +609,7 @@ import SwiftUI
     let text = reply
     reply = ""
     if approvalOrder.contains(id) {
-      deny(id, reason: text)
+      if pendingApproval(id)?.isQuestion == true { answerByText(id, text) } else { deny(id, reason: text) }
       return
     }
     start(
@@ -502,6 +685,13 @@ import SwiftUI
     case threeApprovals = "Three approvals"
     case longCommand = "Long command"
     case riskyTail = "Risky tail"
+    case question = "Question"
+    case questions = "Three questions"
+    case browser = "Browser site"
+    case app = "Computer Use app"
+    case form = "MCP form"
+    case link = "MCP sign-in"
+    case mixed = "Question, site, command"
     case reset = "Reset"
     var id: Self { self }
   }
@@ -552,6 +742,26 @@ import SwiftUI
         start(3, Lab.siteTurn)
       case .longCommand:
         start(1, Lab.longTurn)
+      case .question:
+        start(1, Lab.questionTurn)
+      case .questions:
+        start(2, Lab.questionsTurn)
+      case .browser:
+        start(3, Lab.browserTurn)
+      case .app:
+        start(2, Lab.appTurn)
+      case .form:
+        start(1, Lab.formTurn)
+      case .link:
+        start(2, Lab.linkTurn)
+      case .mixed:
+        start(1, Lab.questionTurn)
+        try? await pause(0.6)
+        guard !Task.isCancelled else { return }
+        start(3, Lab.browserTurn)
+        try? await pause(0.6)
+        guard !Task.isCancelled else { return }
+        start(2, Lab.appcastTurn)
       case .riskyTail:
         start(2, Lab.tailTurn)
       case .many:
@@ -584,6 +794,10 @@ import SwiftUI
     collapsedCards = []
     cardIndex = 0
     keyRevealed = false
+    questionStep = [:]
+    picks = [:]
+    formValues = [:]
+    linksOpened = []
     speech?.cancel()
     stopMeter()
     animate(Tokens.hide) {
@@ -599,6 +813,119 @@ import SwiftUI
   static let approval = Approval(
     title: "Run a command?", command: "swift test --filter Overlay",
     reason: "Check the notch height fix against the overlay tests", detail: "~/dev/openvocally")
+
+  /// What the lab pretends you said while a question waited.
+  static let spokenAnswer = "Keep both for one release, then drop the old one."
+
+  /// What the thread shows as done once a request is answered.
+  static func stepAfter(_ approval: Approval) -> [String] {
+    switch approval.kind {
+    case .command: ["Ran \(approval.command)"]
+    case .edit: ["Edited \(approval.command)"]
+    case .fetch: ["Fetched \(approval.command)"]
+    case .questions: ["Edited ShortcutSettings.swift"]
+    case .browser(let site): ["Clicked Sign in on \(site)"]
+    case .app(let name): ["Used \(name)"]
+    case .form(let server, _): ["Called \(server)"]
+    case .link(let server): ["Connected to \(server)"]
+    }
+  }
+
+  static let questionTurn = Turn(
+    prompt: "Change the agent toggle to ⌥F.",
+    steps: ["Read ShortcutSettings.swift"],
+    approval: Approval(
+      kind: .questions([
+        Question(
+          header: "Old shortcut",
+          text: "People who set ⌥Space for the old toggle will lose it. What should happen to their setting?",
+          options: [
+            QuestionOption(label: "Move it to ⌥F", detail: "Rewrite the saved shortcut on first launch, with no notice."),
+            QuestionOption(label: "Keep ⌥Space for them", detail: "Only new installs get ⌥F."),
+            QuestionOption(label: "Ask on first launch", detail: "Show a one-time choice in Settings."),
+          ])
+      ]),
+      title: "Claude asks", command: ""),
+    reply: "Moved saved ⌥Space toggles to ⌥F on first launch. New installs start with ⌥F.",
+    end: .done("Answered"))
+
+  static let questionsTurn = Turn(
+    prompt: "Set up the 1.1 release.",
+    steps: ["Read CHANGELOG.md", "Read project.yml"],
+    approval: Approval(
+      kind: .questions([
+        Question(
+          header: "Version",
+          text: "Which version number should this release use?",
+          options: [
+            QuestionOption(label: "1.1.0", detail: "Agents is a new feature, so a minor bump."),
+            QuestionOption(label: "1.0.5", detail: "Ship agents behind the flag in a patch."),
+          ]),
+        Question(
+          header: "Channels",
+          text: "Which update channels should get it?",
+          options: [
+            QuestionOption(label: "Stable", detail: "Everyone on the default feed."),
+            QuestionOption(label: "Beta", detail: "People who opted into early builds."),
+            QuestionOption(label: "Homebrew", detail: "Update the cask after the feed."),
+          ],
+          multiSelect: true),
+        Question(
+          header: "Notes",
+          text: "Write the release notes from the merged pull requests, or draft them from the changelog?",
+          options: [
+            QuestionOption(label: "Merged pull requests", detail: nil),
+            QuestionOption(label: "Changelog", detail: nil),
+          ]),
+      ]),
+      title: "Codex asks", command: ""),
+    reply: "Set 1.1.0, prepared the stable and beta feeds, and drafted the notes.", end: .done("Release prepared"))
+
+  static let browserTurn = Turn(
+    prompt: "Check the sign-in page on the local site.",
+    steps: ["Opened a tab in Chrome"],
+    approval: Approval(
+      kind: .browser(site: "localhost:47812"), title: "Use Chrome on localhost:47812?",
+      command: """
+        navigate   http://localhost:47812/login
+        find       "Sign in" button
+        click      Sign in
+        read_page
+        """,
+      reason: "Check that the sign-in button works", detail: "Claude in Chrome"),
+    reply: "The button signs you in and lands on the dashboard. No console errors.", end: .done("Checked"))
+
+  static let appTurn = Turn(
+    prompt: "Work out 2 + 3 in Calculator.",
+    steps: ["Listed open apps"],
+    approval: Approval(
+      kind: .app(name: "Calculator"), title: "Allow Computer Use to use \u{201C}Calculator\u{201D}?",
+      command: "App     Calculator\nAction  click", reason: nil, detail: "Computer Use · low risk"),
+    reply: "Calculator shows 5.", end: .done("5"))
+
+  static let formTurn = Turn(
+    prompt: "File the clipped first word as a Linear issue.",
+    steps: ["Searched Linear for duplicates"],
+    approval: Approval(
+      kind: .form(
+        server: "linear",
+        fields: [
+          FormField(label: "Team", kind: .choice(["Development", "Design", "Support"]), required: true),
+          FormField(label: "Priority", kind: .choice(["Urgent", "High", "Medium", "Low"])),
+          FormField(label: "Title", kind: .text(placeholder: "Clipped first word on Bluetooth headsets"), required: true),
+          FormField(label: "Assign to me", kind: .toggle),
+        ]),
+      title: "linear needs a few details to create the issue", command: "", reason: nil, detail: "MCP server linear"),
+    reply: "Filed the issue in Development.", end: .done("Issue filed"))
+
+  static let linkTurn = Turn(
+    prompt: "List my open Sentry issues.",
+    steps: ["Connected to sentry"],
+    approval: Approval(
+      kind: .link(server: "sentry"), title: "Sign in to Sentry to continue",
+      command: "https://sentry.io/oauth/authorize/?client_id=codex&state=4f2c9a", reason: nil,
+      detail: "MCP server sentry"),
+    reply: "You have 3 open issues. The newest is a crash in the model download.", end: .done("Answered"))
 
   /// What the lab pretends you said while an approval waited.
   static let spokenReason = "No, use make test, it sets up the fixtures."

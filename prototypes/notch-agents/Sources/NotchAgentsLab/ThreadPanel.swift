@@ -441,7 +441,9 @@ private struct ReplyBox: View {
 
   /// Sending while an approval waits denies it and passes the text on as the reason.
   private var placeholder: String {
-    if case .needsYou = thread.state { return "Deny and say why" }
+    if case .needsYou(let approval) = thread.state {
+      return approval.isQuestion ? "Answer in your own words" : "Deny and say why"
+    }
     return "Reply to \(thread.title)"
   }
 }

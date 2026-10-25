@@ -40,27 +40,122 @@ enum Provider: String, CaseIterable {
   }
 }
 
+/// One option on an agent's question. `detail` is the option's description.
+struct QuestionOption: Equatable {
+  var label: String
+  var detail: String?
+}
+
+/// One question from Claude's AskUserQuestion or Codex's `request_user_input`. Both send a short
+/// header, the question, and up to four options; both accept free text as an answer.
+struct Question: Equatable {
+  var header: String
+  var text: String
+  var options: [QuestionOption]
+  var multiSelect = false
+}
+
+/// One field of an MCP form elicitation's `requestedSchema`.
+struct FormField: Equatable {
+  enum Kind: Equatable {
+    case text(placeholder: String)
+    /// A string enum, single select.
+    case choice([String])
+    case toggle
+  }
+
+  var label: String
+  var kind: Kind
+  var required = false
+
+  var isText: Bool {
+    if case .text = kind { return true }
+    return false
+  }
+}
+
 enum ApprovalKind: Equatable {
   case command
   case edit
   case fetch
+  /// The agent asks you something and waits. Speech is the free-text answer.
+  case questions([Question])
+  /// A Claude in Chrome action. `site` is the host the `ClaudeInChromeDomain` suggestion names.
+  case browser(site: String)
+  /// Codex Computer Use asking for one app, which Codex offers once, for the session or always.
+  case app(name: String)
+  /// An MCP server's form elicitation.
+  case form(server: String, fields: [FormField])
+  /// An MCP server's URL elicitation, such as a sign-in.
+  case link(server: String)
+}
+
+/// How long an allow lasts. Each kind offers only the grants its provider supports.
+enum Grant: Equatable {
+  case once
+  case thread
+  case site(String)
+  case always(String)
+
+  var title: String {
+    switch self {
+    case .once: "Allow once"
+    case .thread: "Allow for this thread"
+    case .site(let site): "Allow on \(site) for this thread"
+    case .always(let app): "Always allow \(app)"
+    }
+  }
+
+  var record: String {
+    switch self {
+    case .once: "Allowed once"
+    case .thread: "Allowed for this thread"
+    case .site(let site): "Allowed on \(site) for this thread"
+    case .always(let app): "Always allowed \(app)"
+    }
+  }
 }
 
 struct Approval: Equatable {
   var kind: ApprovalKind = .command
   var title: String
-  /// The exact command, path or URL, never shortened by the agent.
+  /// The exact command, path, URL or list of browser actions, never shortened by the agent.
   var command: String
   /// Why the agent wants it, when the provider says (Codex's `reason`, Claude's tool description).
   var reason: String?
   /// The working folder for a command, or the size of an edit.
   var detail: String?
 
+  var isQuestion: Bool {
+    if case .questions = kind { return true }
+    return false
+  }
+
+  var questions: [Question] {
+    if case .questions(let questions) = kind { return questions }
+    return []
+  }
+
+  /// The grants the Allow menu offers, the lasting ones after once.
+  var grants: [Grant] {
+    switch kind {
+    case .command, .edit, .fetch: [.once, .thread]
+    case .browser(let site): [.once, .site(site)]
+    case .app(let name): [.once, .thread, .always(name)]
+    case .questions, .form, .link: []
+    }
+  }
+
   var verbPhrase: String {
     switch kind {
     case .command: "run \(command.split(separator: "\n").first ?? "")"
     case .edit: "edit \(command)"
     case .fetch: "fetch \(command)"
+    case .questions(let questions): "ask: \(questions.first?.text ?? "")"
+    case .browser(let site): "use Chrome on \(site)"
+    case .app(let name): "use \(name)"
+    case .form(let server, _): "ask for details for \(server)"
+    case .link(let server): "sign in to \(server)"
     }
   }
 }
@@ -147,6 +242,8 @@ enum Dictation: Equatable {
   case sent(thread: Int)
   /// What was said while an approval waited went to the agent as the reason for denying it.
   case deniedWithReason(thread: Int)
+  /// What was said while a question waited went to the agent as the answer.
+  case answeredBySpeech(thread: Int)
 }
 
 enum Level: Equatable {
@@ -295,6 +392,47 @@ enum CommandLength: String, CaseIterable, Identifiable {
 enum AllowPlacement: String, CaseIterable, Identifiable {
   case button = "Its own button"
   case menu = "Menu beside Allow"
+  var id: Self { self }
+}
+
+/// How a card shows a call with several questions.
+enum QuestionLayout: String, CaseIterable, Identifiable {
+  case stepped = "One at a time, 2 of 3"
+  case all = "All on the card"
+  var id: Self { self }
+}
+
+enum OptionStyle: String, CaseIterable, Identifiable {
+  case rows = "Rows with descriptions"
+  case chips = "Chips, description on hover"
+  var id: Self { self }
+}
+
+/// Whether ⌥1–⌥9 pick an option on a visible question card from any app.
+enum OptionKeys: String, CaseIterable, Identifiable {
+  case option = "⌥1–⌥9 on a visible card"
+  case none = "Click only"
+  var id: Self { self }
+}
+
+enum QuestionLinger: String, CaseIterable, Identifiable {
+  case likeApprovals = "Like approvals"
+  case untilAnswered = "Until answered"
+  var id: Self { self }
+}
+
+/// Which allow the primary button gives for browser and Computer Use cards, which ask again on
+/// every action unless the answer lasts.
+enum LastingFirst: String, CaseIterable, Identifiable {
+  case once = "Allow once, lasting in the menu"
+  case lasting = "Lasting allow, once in the menu"
+  var id: Self { self }
+}
+
+/// Where you fill in an MCP form. The closed card never takes focus, so text needs the panel.
+enum FormPlacement: String, CaseIterable, Identifiable {
+  case choicesInline = "Choices on the card, text opens the thread"
+  case panel = "Always open the thread"
   var id: Self { self }
 }
 

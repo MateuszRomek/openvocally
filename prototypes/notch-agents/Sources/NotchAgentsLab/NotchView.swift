@@ -60,6 +60,7 @@ struct SurfaceView: View {
           StatusRow(lab: lab, metrics: metrics, pill: pill)
           if let target = speakingTo { DropLine(text: "Speaking to \(target)") }
           if case .deniedWithReason = lab.dictation { DropLine(text: "Denied. What you said went as the reason.") }
+          if case .answeredBySpeech = lab.dictation { DropLine(text: "What you said went as the answer.") }
         }
         .transition(.blurReplace)
       case .peek:
@@ -248,6 +249,7 @@ struct StatusRow: View {
     case .pasted: Glyph(symbol: "checkmark", tint: .white)
     case .sent: Glyph(symbol: "arrow.up", tint: .white)
     case .deniedWithReason: Glyph(symbol: "xmark", tint: .white)
+    case .answeredBySpeech: Glyph(symbol: "arrow.up", tint: .white)
     case .off:
       if let thread = lab.primaryThread {
         Glyph(symbol: thread.provider.symbol, tint: .white).id(thread.id)
@@ -264,6 +266,7 @@ struct StatusRow: View {
     case .pasted: Word(text: "Pasted")
     case .sent: Word(text: "Sent")
     case .deniedWithReason: Word(text: "Denied")
+    case .answeredBySpeech: Word(text: "Answered")
     case .off:
       if let thread = lab.primaryThread {
         HStack(spacing: 6) {
