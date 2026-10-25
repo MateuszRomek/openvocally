@@ -117,6 +117,12 @@ struct StartDraft: Equatable {
 
 // MARK: - Lab options
 
+enum CardLook: String, CaseIterable, Identifiable {
+  case chips = "Boxed prompt and chips"
+  case calm = "Calm: bare prompt, one line of settings"
+  var id: Self { self }
+}
+
 enum PickerKeys: String, CaseIterable, Identifiable {
   case numbered = "⌘1… opens each picker"
   case tab = "Tab through the chips, ← → change"
@@ -577,7 +583,9 @@ struct StartCard: View {
   @Bindable var lab: Lab
 
   var body: some View {
-    if let draft = lab.draft {
+    if lab.cardLook == .calm {
+      CalmCard(lab: lab)
+    } else if let draft = lab.draft {
       VStack(alignment: .leading, spacing: 10) {
         if let step = draft.launchStep {
           LaunchChecklist(steps: lab.launchSteps(draft), done: step)
@@ -752,7 +760,7 @@ private struct Chip: View {
 }
 
 /// The open picker, inside the card rather than in a popover, so it never takes focus from it.
-private struct OptionList: View {
+struct OptionList: View {
   @Bindable var lab: Lab
   let settings: ThreadSettings
 
@@ -832,7 +840,7 @@ private struct CardFooter: View {
   }
 }
 
-private struct LaunchChecklist: View {
+struct LaunchChecklist: View {
   let steps: [String]
   let done: Int
 

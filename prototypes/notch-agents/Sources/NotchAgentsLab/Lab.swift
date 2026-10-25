@@ -28,7 +28,10 @@ import SwiftUI
   var allowPlacement: AllowPlacement = .menu
   var cardLinger: CardLinger = .shrinks
   var voiceTarget: VoiceTarget = .card
+  var cardLook: CardLook = .calm
   var pickerKeys: PickerKeys = .numbered
+  /// Left ⌘ is down, so the card shows its shortcuts. Right ⌘ is agent mode and never shows them.
+  var shortcutsHeld = false
   var promptStyle: PromptStyle = .field
   var draftMark: DraftMark = .word
   var newThreadKeyBehavior: NewThreadKey = .card

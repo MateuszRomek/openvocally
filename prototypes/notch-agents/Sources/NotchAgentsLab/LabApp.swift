@@ -42,7 +42,10 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     // Switching apps, by ⌘Tab or a click, parks the start card as a draft.
     activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
       forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
-    ) { [weak self] _ in
+    ) { [weak self] note in
+      let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+      // The lab activating itself, at launch or from its control window, isn't switching away.
+      guard app?.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
       MainActor.assumeIsolated { self?.lab.parkDraft() }
     }
     monitors.append(
@@ -89,6 +92,8 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     if args.contains("--one-line") { lab.commandLength = .oneLine }
     if args.contains("--everywhere") { lab.scope = .all }
     if args.contains("--main") { lab.scope = .main }
+    if let look = value("--look") { lab.cardLook = CardLook.allCases.first { "\($0)" == look } ?? .calm }
+    if args.contains("--hints") { lab.shortcutsHeld = true }
     if let keys = value("--keys") { lab.pickerKeys = PickerKeys.allCases.first { "\($0)" == keys } ?? .numbered }
     if args.contains("--prompt-text") { lab.promptStyle = .text }
     if args.contains("--worktree") { lab.lastSettings.worktree = true }
@@ -159,6 +164,9 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
   private func handleFlags(_ event: NSEvent) {
     let flags = event.modifierFlags
     switch event.keyCode {
+    case 55:
+      let down = flags.contains(.command)
+      if down != lab.shortcutsHeld { withAnimation(.easeOut(duration: 0.12)) { lab.shortcutsHeld = down } }
     case 54:
       let down = flags.contains(.command)
       guard down != rightCommandDown else { return }
@@ -271,6 +279,9 @@ private struct ControlPanel: View {
         }
       }
       Section("Start card") {
+        Picker("Look", selection: $lab.cardLook) {
+          ForEach(CardLook.allCases) { Text($0.rawValue).tag($0) }
+        }
         Picker("Picker keys", selection: $lab.pickerKeys) {
           ForEach(PickerKeys.allCases) { Text($0.rawValue).tag($0) }
         }

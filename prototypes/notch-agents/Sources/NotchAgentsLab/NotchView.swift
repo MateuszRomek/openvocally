@@ -294,6 +294,8 @@ struct StatusRow: View {
           StateMark(state: thread.state, indicator: lab.working)
           if lab.attentionThreads.count > 1 { Badge(count: lab.attentionThreads.count) }
         }
+      } else if lab.openLevel == .start, lab.cardLook == .calm, let draft = lab.draft {
+        CalmHeader(lab: lab, project: draft.settings.project)
       } else if lab.openLevel == .start {
         Word(text: "New thread")
       } else if lab.draft != nil {
