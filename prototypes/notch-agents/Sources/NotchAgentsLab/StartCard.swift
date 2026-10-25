@@ -253,9 +253,20 @@ extension Lab {
     if hadPrompt { flash(.discarded) }
   }
 
-  /// Speech whose target is a new thread: it fills the card, which opens if it isn't already.
+  /// The moment agent mode releases with a new thread as the target: the card opens, or stays
+  /// open, with the prompt showing the transcription in progress.
+  func speechIntoCard() {
+    if draft == nil { draft = StartDraft(settings: lastSettings) }
+    transcribingIntoCard = true
+    // The recording row and the card change in one update, so the shape never stops in between.
+    if openLevel != .start { openCard(fromKeyboard: false) }
+    dictation = .off
+  }
+
+  /// The transcription lands in the card's prompt.
   func receiveSpeech() {
     if draft == nil { draft = StartDraft(settings: lastSettings) }
+    defer { transcribingIntoCard = false }
     if draft?.prompt.isEmpty ?? true {
       draft?.prompt = Lab.spokenPrompt
     } else {
@@ -615,10 +626,10 @@ private struct PromptBox: View {
 
   var body: some View {
     Group {
-      if isListening {
+      if isListening || lab.transcribingIntoCard {
         HStack(spacing: 8) {
-          Bars(levels: lab.levels, live: true)
-          Text(draft.prompt.isEmpty ? "Listening" : listeningNote)
+          Bars(levels: lab.levels, live: isListening)
+          Text(!isListening ? "Transcribing" : draft.prompt.isEmpty ? "Listening" : listeningNote)
             .font(Tokens.label)
             .foregroundStyle(.white.opacity(0.75))
           Spacer(minLength: 0)

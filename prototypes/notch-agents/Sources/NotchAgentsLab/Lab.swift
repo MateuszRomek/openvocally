@@ -73,6 +73,8 @@ import SwiftUI
   var cardKeys = 0
   /// ⌥T in the target-only variant: the next agent recording starts a new thread.
   var newThreadArmed = false
+  /// Speech for the card is being transcribed; the prompt shows that in its own place.
+  var transcribingIntoCard = false
   var lastSettings = Lab.firstSettings
   var lastByProject = Lab.projectSettings
   var lastByProvider: [Provider: ThreadSettings] = [:]
@@ -283,15 +285,21 @@ import SwiftUI
   func release() {
     guard case .recording(let target) = dictation else { return }
     stopMeter()
+    if target == Lab.newThreadTarget {
+      // Release already decided where the words go, so the card opens now and transcribes inside
+      // itself: one growth, and the text lands where the placeholder was.
+      speechIntoCard()
+      speech = Task {
+        try? await pause(0.45)
+        guard !Task.isCancelled else { return }
+        swap { receiveSpeech() }
+      }
+      return
+    }
     swap { dictation = .transcribing(thread: target) }
     speech = Task {
       try? await pause(0.45)
       guard !Task.isCancelled else { return }
-      if target == Lab.newThreadTarget {
-        animate(Tokens.hide) { dictation = .off }
-        receiveSpeech()
-        return
-      }
       if target == nil, openLevel == .start {
         // Plain dictation pastes into the focused card like any text field.
         pasteIntoCard()

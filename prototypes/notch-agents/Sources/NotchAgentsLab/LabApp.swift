@@ -45,9 +45,11 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     ) { [weak self] note in
       let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
       // The lab activating itself, at launch or from its control window, isn't switching away.
-      guard app?.processIdentifier != ProcessInfo.processInfo.processIdentifier, self?.lab.passive == false
-      else { return }
-      MainActor.assumeIsolated { self?.lab.parkDraft() }
+      guard app?.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
+      MainActor.assumeIsolated {
+        guard let lab = self?.lab, !lab.passive else { return }
+        lab.parkDraft()
+      }
     }
     monitors.append(
       NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in

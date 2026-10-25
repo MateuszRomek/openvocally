@@ -67,13 +67,17 @@ private struct CalmPrompt: View {
 
   var body: some View {
     Group {
-      if isListening {
+      if isListening || lab.transcribingIntoCard {
         HStack(spacing: 8) {
-          Bars(levels: lab.levels, live: true)
-          Text("Listening").font(.system(size: 15)).foregroundStyle(.white.opacity(0.55))
+          Bars(levels: lab.levels, live: isListening)
+          Text(isListening ? "Listening" : "Transcribing")
+            .font(.system(size: 15))
+            .foregroundStyle(.white.opacity(0.55))
+            .contentTransition(.opacity)
           Spacer(minLength: 0)
         }
-        .frame(minHeight: 20)
+        // One line of 15 pt text, so the prompt doesn't nudge the card when the words land.
+        .frame(height: 19)
       } else if lab.promptStyle == .field || lab.editingPrompt {
         TextField(
           text: Binding(get: { lab.draft?.prompt ?? "" }, set: { lab.draft?.prompt = $0 }),
