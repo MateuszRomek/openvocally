@@ -120,6 +120,7 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     case "tail": lab.play(.riskyTail)
     case "start": lab.newThreadKey()
     case "spoken": lab.play(.speakNew)
+    case "card-approval": lab.play(.approvalDuringCard)
     case "draft":
       lab.play(.speakNew)
       Task {
@@ -306,6 +307,7 @@ private struct ControlPanel: View {
           Button(Lab.Scenario.speakNew.rawValue) { lab.play(.speakNew) }
           Button(Lab.Scenario.speakAgain.rawValue) { lab.play(.speakAgain) }
         }
+        Button(Lab.Scenario.approvalDuringCard.rawValue) { lab.play(.approvalDuringCard) }
       }
       Section("Sequences") {
         HStack {
@@ -319,7 +321,7 @@ private struct ControlPanel: View {
           }
         }
         HStack {
-          ForEach(Lab.Scenario.allCases.dropFirst(8).filter { $0 != .speakNew && $0 != .speakAgain }) { scenario in
+          ForEach(Lab.Scenario.allCases.dropFirst(8).filter { ![.speakNew, .speakAgain, .approvalDuringCard].contains($0) }) { scenario in
             Button(scenario.rawValue) { lab.play(scenario) }
           }
         }

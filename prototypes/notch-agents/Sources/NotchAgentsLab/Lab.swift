@@ -548,6 +548,7 @@ import SwiftUI
     case riskyTail = "Risky tail"
     case speakNew = "Speak a new thread"
     case speakAgain = "Speak again into the card"
+    case approvalDuringCard = "Approval while the card is open"
     case reset = "Reset"
     var id: Self { self }
   }
@@ -598,6 +599,16 @@ import SwiftUI
         start(3, Lab.siteTurn)
       case .longCommand:
         start(1, Lab.longTurn)
+      case .approvalDuringCard:
+        // The card opens, then a running thread asks for approval while you're still in it.
+        newThreadArmed = true
+        press(agentMode: true)
+        try? await pause(1.8)
+        guard !Task.isCancelled else { return }
+        release()
+        try? await pause(1)
+        guard !Task.isCancelled else { return }
+        start(1, Lab.testTurn)
       case .speakNew, .speakAgain:
         // Agent mode with a new thread as the target: hold, talk, release.
         if scenario == .speakNew, openLevel != .start { newThreadArmed = true }

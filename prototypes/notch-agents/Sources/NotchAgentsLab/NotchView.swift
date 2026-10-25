@@ -265,10 +265,16 @@ struct StatusRow: View {
     case .discarded: Glyph(symbol: "xmark", tint: .white)
     case .deniedWithReason: Glyph(symbol: "xmark", tint: .white)
     case .off:
-      if let thread = lab.primaryThread {
-        Glyph(symbol: thread.provider.symbol, tint: .white).id(thread.id)
+      if lab.openLevel == .start, !lab.approvalOrder.isEmpty {
+        // An approval waits until the card closes; the camera's side says one is there.
+        HStack(spacing: 4) {
+          StateMark(state: .needsYou(Lab.approval), indicator: lab.working, showsWord: false)
+          Badge(count: lab.approvalOrder.count)
+        }
       } else if lab.openLevel == .start, let draft = lab.draft {
         Glyph(symbol: draft.settings.provider.symbol, tint: .white).id(draft.settings.provider)
+      } else if let thread = lab.primaryThread {
+        Glyph(symbol: thread.provider.symbol, tint: .white).id(thread.id)
       } else if lab.draft != nil {
         Glyph(symbol: "square.and.pencil", tint: .white)
       } else if lab.newThreadArmed {
@@ -289,15 +295,15 @@ struct StatusRow: View {
     case .discarded: Word(text: "Discarded")
     case .deniedWithReason: Word(text: "Denied")
     case .off:
-      if let thread = lab.primaryThread {
+      if lab.openLevel == .start, lab.cardLook == .calm, let draft = lab.draft {
+        CalmHeader(lab: lab, project: draft.settings.project)
+      } else if lab.openLevel == .start {
+        Word(text: "New thread")
+      } else if let thread = lab.primaryThread {
         HStack(spacing: 6) {
           StateMark(state: thread.state, indicator: lab.working)
           if lab.attentionThreads.count > 1 { Badge(count: lab.attentionThreads.count) }
         }
-      } else if lab.openLevel == .start, lab.cardLook == .calm, let draft = lab.draft {
-        CalmHeader(lab: lab, project: draft.settings.project)
-      } else if lab.openLevel == .start {
-        Word(text: "New thread")
       } else if lab.draft != nil {
         if lab.draftMark != .glyph { Word(text: "Draft") }
       } else if lab.newThreadArmed {
