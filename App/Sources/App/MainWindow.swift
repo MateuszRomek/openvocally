@@ -51,6 +51,7 @@ struct MainWindow: View {
       .safeAreaInset(edge: .bottom, spacing: 0) {
         SidebarFooter {
           UpdateNotice(updates: model.updates)
+        } content: {
           SidebarRow(
             Screen.settings.title, systemImage: Screen.settings.symbol,
             isSelected: model.screen == .settings, action: { model.screen = .settings }
@@ -105,11 +106,11 @@ private struct UpdateNotice: View {
       case .none: EmptyView()
       case .available(let version):
         SidebarNotice(
-          "Update Available", detail: version, systemImage: "arrow.down.circle.fill",
+          "Update Available", detail: "Version \(version)", systemImage: "arrow.down.circle.fill",
           action: updates.showAvailableUpdate)
       case .readyToInstall(let version):
         SidebarNotice(
-          "Restart to Update", detail: version, systemImage: "arrow.clockwise.circle.fill",
+          "Restart to Update", detail: "Version \(version)", systemImage: "arrow.clockwise.circle.fill",
           action: updates.installNow)
       }
     }

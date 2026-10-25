@@ -2,16 +2,20 @@ import AppKit
 import SwiftUI
 
 /// The bottom of a sidebar, under its List: a hairline, then rows such as Settings that stay
-/// in view however long the list grows.
-public struct SidebarFooter<Content: View>: View {
+/// in view however long the list grows. A `SidebarNotice` goes in `notice`, above the hairline,
+/// so it reads as news on its own and not as part of the rows under it.
+public struct SidebarFooter<Notice: View, Content: View>: View {
+  let notice: Notice
   let content: Content
 
-  public init(@ViewBuilder content: () -> Content) {
+  public init(@ViewBuilder notice: () -> Notice, @ViewBuilder content: () -> Content) {
+    self.notice = notice()
     self.content = content()
   }
 
   public var body: some View {
     VStack(spacing: Space.xs.points) {
+      notice
       Divider().padding(.horizontal, Space.xs)
       content
     }
@@ -64,14 +68,20 @@ public struct SidebarRow<Accessory: View>: View {
   }
 }
 
+extension SidebarFooter where Notice == EmptyView {
+  public init(@ViewBuilder content: () -> Content) {
+    self.init(notice: { EmptyView() }, content: content)
+  }
+}
+
 extension SidebarRow where Accessory == EmptyView {
   public init(_ title: String, systemImage: String, isSelected: Bool, action: @escaping () -> Void) {
     self.init(title, systemImage: systemImage, isSelected: isSelected, action: action) { EmptyView() }
   }
 }
 
-/// A calm notice in a `SidebarFooter`, such as an update waiting to install: an `accent` icon,
-/// a title and a secondary detail. It is the one highlight on screen, so it never uses
+/// A calm notice in a `SidebarFooter`'s `notice`, such as an update waiting to install: an `accent` icon,
+/// a title and a secondary detail under it. It is the one highlight on screen, so it never uses
 /// `attention`. Insert it with `SidebarNotice.entrance(reduceMotion:)` and `Motion.windowReveal`.
 public struct SidebarNotice: View {
   let title: String
@@ -93,15 +103,19 @@ public struct SidebarNotice: View {
           .imageScale(.large)
           .foregroundStyle(SemanticColor.accent.color)
           .frame(width: Space.xl.points)
-        Text(title).lineLimit(1)
-        Spacer(minLength: 0)
-        if let detail {
-          Text(detail)
-            .textStyle(.callout)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .monospacedDigit()
+        // The detail sits under the title, not beside it: side by side, "Restart to Update" and
+        // a version overflow the 200 pt sidebar and the title truncates. Both wrap rather than truncate.
+        VStack(alignment: .leading, spacing: 0) {
+          Text(title)
+          if let detail {
+            Text(detail)
+              .textStyle(.caption)
+              .foregroundStyle(.secondary)
+              .monospacedDigit()
+          }
         }
+        .fixedSize(horizontal: false, vertical: true)
+        Spacer(minLength: 0)
       }
       .padding(.horizontal, Space.s)
       .padding(.vertical, Space.xs.points + Space.xxs.points)
