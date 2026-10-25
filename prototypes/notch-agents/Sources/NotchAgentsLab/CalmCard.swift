@@ -131,11 +131,8 @@ private struct SettingsLine: View {
       }
       if draft.settings.worktree {
         HStack(spacing: 0) {
-          TextField(
-            "Branch",
-            text: Binding(get: { lab.draft?.branch ?? "" }, set: { lab.draft?.branchOverride = $0 })
-          )
-          .textFieldStyle(.plain)
+          // Read-only: renaming the branch is something you ask the agent to do.
+          Text(draft.branch)
           .font(.system(size: 11.5).monospaced())
           .foregroundStyle(.white.opacity(0.55))
           .fixedSize()
