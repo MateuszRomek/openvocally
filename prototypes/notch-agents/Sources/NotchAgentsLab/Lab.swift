@@ -31,8 +31,8 @@ import SwiftUI
   var questionLayout: QuestionLayout = .stepped
   var optionStyle: OptionStyle = .rows
   var optionKeys: OptionKeys = .option
-  var questionLinger: QuestionLinger = .untilAnswered
-  var lastingFirst: LastingFirst = .once
+  var questionLinger: QuestionLinger = .likeApprovals
+  var lastingFirst: LastingFirst = .lasting
   var formPlacement: FormPlacement = .choicesInline
 
   // Scene
@@ -59,6 +59,8 @@ import SwiftUI
   var questionStep: [Int: Int] = [:]
   /// Picked options per thread, by question index.
   var picks: [Int: [Int: Set<Int>]] = [:]
+  /// Answers in your own words per thread, by question index: speech or a typed reply.
+  var ownWords: [Int: [Int: String]] = [:]
   /// Form values per thread, by field index.
   var formValues: [Int: [Int: String]] = [:]
   /// Sign-in links you opened, waiting for the server to say you finished.
@@ -427,7 +429,7 @@ import SwiftUI
   /// Next for a multi-select question, or Submit once every question has an answer.
   func advance(_ id: Int, from question: Int) {
     guard let questions = pendingApproval(id)?.questions else { return }
-    let answered = questions.indices.allSatisfy { !(picks[id]?[$0] ?? []).isEmpty }
+    let answered = questions.indices.allSatisfy { !(picks[id]?[$0] ?? []).isEmpty || ownWords[id]?[$0] != nil }
     if questionLayout == .stepped, question < questions.count - 1 {
       animate(Tokens.swap) { questionStep[id] = question + 1 }
     } else if answered {
@@ -442,32 +444,28 @@ import SwiftUI
 
   func canSubmit(_ id: Int) -> Bool {
     guard let questions = pendingApproval(id)?.questions else { return false }
-    return questions.indices.allSatisfy { !(picks[id]?[$0] ?? []).isEmpty }
+    return questions.indices.allSatisfy { !(picks[id]?[$0] ?? []).isEmpty || ownWords[id]?[$0] != nil }
   }
 
   func submitQuestions(_ id: Int) {
     guard let questions = pendingApproval(id)?.questions else { return }
     let labels = questions.indices.flatMap { index in
-      (picks[id]?[index] ?? []).sorted().map { questions[index].options[$0].label }
+      ownWords[id]?[index].map { _ in ["your words"] }
+        ?? (picks[id]?[index] ?? []).sorted().map { questions[index].options[$0].label }
     }
     finish(id, record: "Answered: \(labels.joined(separator: ", "))")
   }
 
-  /// Speech or a typed reply answers the question on screen in your own words, and the
-  /// questions after it stay unanswered, so the agent asks again if it still needs them.
+  /// Speech or a typed reply is the free-text answer to the question on screen, sent word for
+  /// word. The card moves on to the next question, and the call ends after the last.
   func answerByText(_ id: Int, _ text: String) {
     guard approvalOrder.contains(id) else { return }
-    afterApproval[id] = nil
-    animate(Tokens.close) {
-      settle(id)
-      append(id, .tool, "Answered in your words")
+    let question = currentQuestion(id)
+    animate(Tokens.swap) {
+      ownWords[id, default: [:]][question] = text
+      picks[id, default: [:]][question] = nil
     }
-    start(
-      id,
-      Turn(
-        prompt: text, steps: ["Edited ShortcutSettings.swift"], approval: nil,
-        reply: "Kept ⌥F as the toggle and added a note in the release notes. I'll remove the old shortcut in 1.1.",
-        end: .done("Answered")))
+    advance(id, from: question)
   }
 
   /// Skip declines the question; the agent carries on without an answer.
@@ -584,6 +582,7 @@ import SwiftUI
   private func settle(_ id: Int) {
     questionStep[id] = nil
     picks[id] = nil
+    ownWords[id] = nil
     formValues[id] = nil
     linksOpened.remove(id)
     approvalOrder.removeAll { $0 == id }
@@ -796,6 +795,7 @@ import SwiftUI
     keyRevealed = false
     questionStep = [:]
     picks = [:]
+    ownWords = [:]
     formValues = [:]
     linksOpened = []
     speech?.cancel()

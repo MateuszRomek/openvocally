@@ -477,6 +477,12 @@ private struct QuestionsBody: View {
       if question.multiSelect {
         Text("Choose any").font(.system(size: 11)).foregroundStyle(.tertiary)
       }
+      if let words = lab.ownWords[thread]?[index] {
+        Text("Your answer: \u{201C}\(words)\u{201D}")
+          .font(.system(size: 11))
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
       switch lab.optionStyle {
       case .rows:
         VStack(spacing: 4) {
