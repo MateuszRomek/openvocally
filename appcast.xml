@@ -6,6 +6,19 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>OpenVocally</title>
         <item>
+            <title>1.0.5</title>
+            <pubDate>Sun, 25 Oct 2026 19:27:00 +0100</pubDate>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[- Fixed: the dictation pill stopped showing over full-screen apps after a full-screen Space closed, until OpenVocally restarted.
+- Fixed: deleting a model while it installed, or changing a model's language during a check, could leave the model in the wrong state.
+- Fixed: the update notice in the sidebar cut off its title. The version now shows on its own line.
+]]></description>
+            <enclosure url="https://github.com/MateuszRomek/openvocally/releases/download/v1.0.5/OpenVocally-1.0.5.zip" length="11540100" type="application/octet-stream" sparkle:edSignature="W9zVHZpKm8It1KabYx97i4QpUcKxOERP0dXNMbncvUc2Vrp8pMGt50WoecafNwJcdhvVi9E//jAXIZzSqqmCAQ=="/>
+        </item>
+        <item>
             <title>1.0.4</title>
             <pubDate>Tue, 20 Oct 2026 20:34:36 +0200</pubDate>
             <sparkle:version>5</sparkle:version>
@@ -75,6 +88,6 @@ Requires a Mac with Apple Silicon and macOS 15 or newer.
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: xsuWWu13mu7ufJEPRVpjewU9TBAVuKmj6Sspcch1yjMx86yyr1gmaxyes2yS4FM30/QR8bMVVG3tCPj8qgHLBw==
-length: 5386
+edSignature: dx1nYkprcP6zp8K7drBhdt3AVEOb2pboQYxOSnHFK/cDECTlVMtyMoT3Eui6V8jRA6g7+FYGesA7X4O8ReZrCg==
+length: 6519
 -->
