@@ -1,6 +1,10 @@
 import DesignSystem
 import SwiftUI
 
+#if FEATURE_AGENTS
+  import Agents
+#endif
+
 /// The main window's screens. Settings is one of them, so it opens in the window,
 /// not in a separate one, from the sidebar footer.
 enum Screen: String, CaseIterable, Identifiable {
@@ -51,6 +55,9 @@ struct MainWindow: View {
       .safeAreaInset(edge: .bottom, spacing: 0) {
         SidebarFooter {
           UpdateNotice(updates: model.updates)
+          #if FEATURE_AGENTS
+            if model.updates.state == .none { AgentUpdateNoticeView(model: model) }
+          #endif
         } content: {
           SidebarRow(
             Screen.settings.title, systemImage: Screen.settings.symbol,
@@ -118,3 +125,28 @@ private struct UpdateNotice: View {
     .animation(reduceMotion ? nil : Motion.windowReveal.animation, value: updates.state)
   }
 }
+
+#if FEATURE_AGENTS
+  /// One notice for every coding agent with an unseen update. The app's own update wins the slot.
+  private struct AgentUpdateNoticeView: View {
+    let model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+      Group {
+        if let notice = model.agents.updateNotice {
+          SidebarNotice(
+            notice.title, detail: notice.detail, systemImage: "arrow.down.circle.fill",
+            action: { model.openAgentUpdate(notice) }
+          )
+          .contextMenu {
+            Button("Dismiss") { model.agents.dismiss(notice) }
+          }
+          .accessibilityAction(named: "Dismiss") { model.agents.dismiss(notice) }
+        }
+      }
+      .transition(SidebarNotice.entrance(reduceMotion: reduceMotion))
+      .animation(reduceMotion ? nil : Motion.windowReveal.animation, value: model.agents.updateNotice)
+    }
+  }
+#endif

@@ -65,6 +65,8 @@ targets:
         product: DesignSystem
       - package: OpenVocallyKit
         product: Reporting
+      - package: OpenVocallyKit
+        product: Agents
       - package: Sparkle
     info:
       path: App/Resources/Info.plist
@@ -119,7 +121,7 @@ targets:
           ASSETCATALOG_COMPILER_APPICON_NAME: AppIconDev
           # Unfinished features build only here, behind FEATURE_<NAME> flags appended to this
           # list, so Release binaries carry no dormant code.
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) FEATURE_NOTCH
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) FEATURE_NOTCH FEATURE_AGENTS
         Release:
           EXCLUDED_SOURCE_FILE_NAMES: AppIconDev.icon Debug.xcassets
 schemes:

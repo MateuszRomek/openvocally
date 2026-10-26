@@ -7,6 +7,8 @@ let strict: [SwiftSetting] = [
   .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
 ]
 
+let agentsSettings = strict + [.define("FEATURE_AGENTS", .when(configuration: .debug))]
+
 let package = Package(
   name: "OpenVocallyKit",
   platforms: [.macOS(.v15)],
@@ -24,6 +26,7 @@ let package = Package(
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Reporting", targets: ["Reporting"]),
     .library(name: "Diagnostics", targets: ["Diagnostics"]),
+    .library(name: "Agents", targets: ["Agents"]),
   ],
   dependencies: [
     // NemoTextProcessing normalizes text for FluidAudio's TTS, which the app does not use.
@@ -103,6 +106,10 @@ let package = Package(
     .target(
       name: "AgentFakesTestSupport", dependencies: ["AgentFakes", "FakeAgentCLI"],
       path: "Tests/AgentFakesTestSupport", swiftSettings: strict),
+    .target(name: "Agents", swiftSettings: agentsSettings),
+    .testTarget(
+      name: "AgentsTests", dependencies: ["Agents", "AgentFakes", "AgentFakesTestSupport"],
+      swiftSettings: agentsSettings),
     .testTarget(
       name: "AgentFakesTests", dependencies: ["AgentFakes", "AgentFakesTestSupport"], swiftSettings: strict),
   ]
