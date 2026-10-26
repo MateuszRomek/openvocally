@@ -23,6 +23,10 @@ trap 'cp "$saved" "$resolved"; rm -f "$saved"' EXIT
 swift build --package-path OpenVocallyKit -c release --product Agents >/dev/null
 bin="$(swift build --package-path OpenVocallyKit -c release --show-bin-path)"
 
+# A missing object would read as "no symbols", so a changed SwiftPM layout fails instead.
+for module in Agents AgentsCore Storage; do
+  [[ -f "$bin/$module.o" ]] || { echo "check-unshipped-features: no $bin/$module.o. Update this script's object paths." >&2; exit 1; }
+done
 failed=0
 for module in Agents AgentsCore; do
   symbols="$(nm -U "$bin/$module.o" | grep -v ' ___swift_reflection_version$' || true)"

@@ -214,6 +214,8 @@ final class TestClock: Sendable {
     #expect(fixture.agents.projects.map(\.health) == [.missing])
     let reloaded = AgentsService(database: fixture.database)
     try await reloaded.load()
+    #expect(reloaded.projects.map(\.health) == [.available])
+    await reloaded.refreshHealth()
     #expect(reloaded.projects.map(\.health) == [.missing])
   }
 

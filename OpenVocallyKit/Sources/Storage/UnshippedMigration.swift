@@ -4,11 +4,17 @@
   extension DatabaseMigrator {
     /// The migration of a feature still behind its Debug-only flag. Its identifier carries a hash
     /// of `sql`, so an edited schema runs again on every Debug database, after dropping the
-    /// feature's tables, which hold only Debug data. It exists only in Debug, so a call left
-    /// outside its flag fails the Release build. When the feature ships, register `sql` as the
-    /// next `vN` and record its snapshot, which `SnapshotMigrationTests` asks for.
+    /// feature's tables, which hold only Debug data. Each run forgets the feature's earlier
+    /// identifiers, so switching back to an older schema runs it again too. It exists only in
+    /// Debug, so a call left outside its flag fails the Release build. When the feature ships,
+    /// register `sql` as the next `vN` and record its snapshot, which `SnapshotMigrationTests`
+    /// asks for.
     mutating func registerUnshippedMigration(_ feature: String, tablePrefix: String, sql: String) {
-      registerMigration("\(Self.unshippedPrefix)\(feature)-\(Self.fnv1a(sql))") { db in
+      let prefix = "\(Self.unshippedPrefix)\(feature)-"
+      registerMigration("\(prefix)\(Self.fnv1a(sql))") { db in
+        try db.execute(
+          sql: "DELETE FROM grdb_migrations WHERE substr(identifier, 1, ?) = ?",
+          arguments: [prefix.count, prefix])
         let pattern = tablePrefix.replacingOccurrences(of: "_", with: "\\_") + "%"
         let tables = try String.fetchAll(
           db, sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE ? ESCAPE '\\'",

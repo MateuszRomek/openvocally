@@ -51,7 +51,8 @@
       self.clock = clock
     }
 
-    /// Reads the projects, then their health. The App calls it after init and from Try Again.
+    /// Reads the projects. Their health follows in the background, so a hung volume never holds
+    /// back the list. The App calls it after init and from Try Again.
     public func load() async throws {
       do {
         try await reload()
@@ -60,7 +61,6 @@
         loadFailed = true
         throw error
       }
-      await refreshHealth()
     }
 
     public func addProject(at url: URL) async throws -> AddProjectOutcome {

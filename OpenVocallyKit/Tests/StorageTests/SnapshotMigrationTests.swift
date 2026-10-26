@@ -66,6 +66,26 @@ struct SnapshotMigrationTests {
     #expect(snapshots().map(\.name) == shipped)
   }
 
+  /// A branch switch can bring back a schema a Debug database already ran once.
+  @Test func anUnshippedSchemaRunsAgainWhenItComesBack() throws {
+    func migrate(_ queue: DatabaseQueue, _ sql: String) throws {
+      var migrator = DatabaseMigrator()
+      migrator.registerUnshippedMigration("lab", tablePrefix: "lab_", sql: sql)
+      try migrator.migrate(queue)
+    }
+    func columns(_ queue: DatabaseQueue) throws -> [String] {
+      try queue.read { try $0.columns(in: "lab_items").map(\.name) }
+    }
+    let first = "CREATE TABLE lab_items (id INTEGER PRIMARY KEY, a TEXT);"
+    let second = "CREATE TABLE lab_items (id INTEGER PRIMARY KEY, b TEXT);"
+    let queue = try DatabaseQueue()
+    try migrate(queue, first)
+    try migrate(queue, second)
+    #expect(try columns(queue) == ["id", "b"])
+    try migrate(queue, first)
+    #expect(try columns(queue) == ["id", "a"])
+  }
+
   /// Release registers only the shipped migrations. A shipped one after an unshipped one would run
   /// after it in Debug and without it in Release.
   @Test func unshippedMigrationsComeLast() {

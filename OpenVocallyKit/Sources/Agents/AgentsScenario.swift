@@ -131,6 +131,8 @@
           at: root.appending(path: missingFolder, directoryHint: .isDirectory))
       }
       try await service.load()
+      // Before the screen shows, so the Folder missing shot never catches the row unchecked.
+      await service.refreshHealth()
       return service
     }
   }
