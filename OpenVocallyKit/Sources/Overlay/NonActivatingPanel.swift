@@ -10,8 +10,8 @@ final class NonActivatingPanel: NSPanel {
     frameRect
   }
 
-  /// Click-through, never takes focus, above full-screen apps, on every Space. Configured like
-  /// the pill's panel.
+  /// Click-through, never takes focus, above full-screen apps, on every Space. Both overlay
+  /// hosts build their panels here.
   static func overlay(size: CGSize) -> NonActivatingPanel {
     let panel = NonActivatingPanel(
       contentRect: NSRect(origin: .zero, size: size),

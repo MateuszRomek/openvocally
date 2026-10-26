@@ -32,6 +32,9 @@ struct NotchFrameView: View {
 
   /// A press's feedback never fades in, so under Reduce Motion an entry is instant.
   private func shapeAnimation(reduceMotion: Bool) -> Animation? {
+    // The core never pairs a content cue with a size change. Only prewarm does, when it swaps
+    // its warm-up frame for the hidden scene, and that swap must not play as a collapse.
+    if drawing.motion == .content { return nil }
     if reduceMotion && drawing.motion == .appear { return nil }
     return drawing.motion.motion.resolved(reduceMotion: reduceMotion)
   }
