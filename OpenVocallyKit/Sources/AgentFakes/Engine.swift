@@ -53,16 +53,14 @@ package struct HealthAnswer: Equatable, Sendable {
   package let stderr: String
   package let exitCode: Int32
 
-  /// Formats measured from claude 2.1.306 and codex-cli 0.164.0-alpha.
+  /// Formats measured from claude 2.1.306 and codex-cli 0.164.0-alpha.11.1.
   package static func `for`(
     _ provider: Provider, _ profile: HealthProfile, _ command: HealthCommand
   ) -> HealthAnswer {
     let unreadable = HealthAnswer(stdout: "", stderr: "Error: could not read credentials\n", exitCode: 2)
     switch (provider, command, profile) {
-    case (.claude, .version, .belowMinimumVersion): return .init(stdout: "2.1.200 (Claude Code)\n")
-    case (.claude, .version, _): return .init(stdout: "2.1.306 (Claude Code)\n")
-    case (.codex, .version, .belowMinimumVersion): return .init(stdout: "codex-cli 0.150.0\n")
-    case (.codex, .version, _): return .init(stdout: "codex-cli 0.164.0\n")
+    case (.claude, .version, _): return .init(stdout: "\(ClaudeWire.version(profile)) (Claude Code)\n")
+    case (.codex, .version, _): return .init(stdout: "codex-cli \(CodexWire.version(profile))\n")
     case (_, .loginStatus, .needsAttention): return unreadable
     case (.claude, .loginStatus(text: false), .loggedOut):
       return .init(stdout: claudeStatus(loggedIn: false, method: "none"), exitCode: 1)
@@ -194,7 +192,9 @@ enum Session {
     do {
       let wire: any Wire =
         switch provider {
-        case .claude: try ClaudeWire(arguments: arguments, environment: environment, inbox: Inbox())
+        case .claude:
+          try ClaudeWire(
+            arguments: arguments, environment: environment, health: scenario.health, inbox: Inbox())
         case .codex: try CodexWire(arguments: arguments, health: scenario.health, inbox: Inbox())
         }
       try await wire.start(resume: scenario.resume)
@@ -211,16 +211,17 @@ struct SessionEngine {
   let wire: any Wire
 
   /// After the script, every further user turn gets "Okay.", so a host can send more turns than the
-  /// script names. A failed turn sets the exit code on stdin EOF the way each real CLI does.
+  /// script names. After a failed turn every further turn fails the same way, as a logged-out CLI's
+  /// do, and stdin EOF exits with the code each real CLI uses.
   func run(_ script: [Beat]) async throws -> Int32 {
     let failedExit = type(of: wire).exitCodeAfterFailedTurn
     var stack = Array(script.reversed())
     var answers: [String] = []
-    var failed = false
+    var failure: TurnFailure?
     while let beat = stack.popLast() {
       switch beat {
       case .awaitUserTurn:
-        guard try await wire.nextUserTurn() != nil else { return failed ? failedExit : 0 }
+        guard try await wire.nextUserTurn() != nil else { return failure == nil ? 0 : failedExit }
         try await wire.openTurn(selfStarted: false)
       case .selfStartTurn:
         try await wire.openTurn(selfStarted: true)
@@ -241,19 +242,23 @@ struct SessionEngine {
         }
       case .completeTurn:
         try await wire.closeTurn(.completed)
-      case .failTurn(let failure):
-        failed = true
-        try await wire.closeTurn(.failed(failure))
+      case .failTurn(let turnFailure):
+        failure = turnFailure
+        try await wire.closeTurn(.failed(turnFailure))
       case .crash(let exitCode, let stderr):
         throw SessionExit(code: exitCode, stderr: stderr)
       }
     }
     while try await wire.nextUserTurn() != nil {
       try await wire.openTurn(selfStarted: false)
+      if let failure {
+        try await wire.closeTurn(.failed(failure))
+        continue
+      }
       try await wire.stream(["Okay."])
       try await wire.closeTurn(.completed)
     }
-    return failed ? failedExit : 0
+    return failure == nil ? 0 : failedExit
   }
 }
 

@@ -16,6 +16,8 @@ struct ClaudeLaunch {
   let emitsSessionState: Bool
   let includesPartialMessages: Bool
 
+  static let permissionModes = ["default", "acceptEdits", "auto", "bypassPermissions", "dontAsk", "plan"]
+
   private static let valued: Set<String> = [
     "--input-format", "--output-format", "--session-id", "--resume", "--settings", "--permission-mode",
     "--permission-prompt-tool",
@@ -51,11 +53,20 @@ struct ClaudeLaunch {
       throw missing("--permission-prompt-tool stdio")
     }
     guard let permissionMode = values["--permission-mode"] else { throw missing("--permission-mode <mode>") }
+    guard Self.permissionModes.contains(permissionMode) else {
+      throw SessionExit(
+        code: 1,
+        stderr: "error: option '--permission-mode <mode>' argument '\(permissionMode)' is invalid. "
+          + "Allowed choices are \(Self.permissionModes.joined(separator: ", ")).")
+    }
     guard let settings = values["--settings"] else { throw missing("--settings <file>") }
     switch (values["--session-id"], values["--resume"]) {
     case (let id?, nil): session = .new(id: id)
     case (nil, let id?): session = .resume(id: id)
     default: throw missing("exactly one of --session-id <uuid> and --resume <id>")
+    }
+    if case .new(let id) = session, UUID(uuidString: id) == nil {
+      throw SessionExit(code: 1, stderr: "Error: Invalid session ID. Must be a valid UUID.")
     }
     let hooks: JSONValue
     do {
@@ -73,7 +84,9 @@ struct ClaudeLaunch {
     self.permissionMode = permissionMode
     permissionHook = httpHook("PermissionRequest")
     elicitationHook = httpHook("Elicitation")
-    emitsSessionState = environment["CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS"].map { !$0.isEmpty } ?? false
+    emitsSessionState =
+      environment["CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS"].map { ["1", "true"].contains($0.lowercased()) }
+      ?? false
     includesPartialMessages = flags.contains("--include-partial-messages")
   }
 }
@@ -82,14 +95,24 @@ final class ClaudeWire: Wire {
   private let launch: ClaudeLaunch
   private let inbox: Inbox
   private let sessionID: String
+  private let version: String
   private var ids = Ids()
   private var sentInit = false
   private var turnText = ""
-  /// The message of the last `deny` decision, for the tool result.
+  /// Starts as `--permission-mode`; `set_permission_mode` changes it for later frames.
+  private var permissionMode: String
+  /// User messages that arrived while an ask waited, in order, for the next turns.
+  private var queuedTurns: [String] = []
+  /// This turn's denied tool uses, for the result's `permission_denials`.
+  private var denials: [JSONValue] = []
+  /// Set by a `deny` decision, with its message if it had one, for the tool result.
+  private var denied = false
   private var denial: String?
 
-  init(arguments: [String], environment: [String: String], inbox: Inbox) throws {
+  init(arguments: [String], environment: [String: String], health: HealthProfile, inbox: Inbox) throws {
     launch = try ClaudeLaunch(arguments: arguments, environment: environment)
+    version = Self.version(health)
+    permissionMode = launch.permissionMode
     self.inbox = inbox
     switch launch.session {
     case .new(let id), .resume(let id): sessionID = id
@@ -98,8 +121,22 @@ final class ClaudeWire: Wire {
 
   static let exitCodeAfterFailedTurn: Int32 = 1
 
+  static func version(_ health: HealthProfile) -> String {
+    health == .belowMinimumVersion ? "2.1.200" : "2.1.306"
+  }
+
+  /// Copied from the init frame claude 2.1.306 wrote.
+  private static let capabilities: JSONValue = [
+    "interrupt_receipt_v1", "interrupt_cancel_queued_v1", "interrupt_send_now_v1", "msg_lifecycle_v1",
+    "request_marker_lists_v1", "sdk_mcp_tools_list_changed", "sdk_mcp_manifests", "mcp_read_resource_v1",
+    "mcp_tool_ui_meta_v1", "ui_surface_v1", "mcp_call_result_not_for_model_v1",
+  ]
+
   static func encodes(_ ask: Ask) -> Bool {
-    if case .computerUse = ask { false } else { true }
+    switch ask {
+    case .computerUse, .mcpUnknownMode: false
+    case .command, .fileChange, .chromeSite, .question, .mcpForm, .mcpSignIn: true
+    }
   }
 
   func start(resume: ResumeBehavior) async throws {
@@ -108,12 +145,13 @@ final class ClaudeWire: Wire {
     write([
       "type": "result", "subtype": "error_during_execution", "duration_ms": 0, "duration_api_ms": 0,
       "is_error": true, "num_turns": 0, "stop_reason": nil, "total_cost_usd": 0, "usage": Self.usage,
-      "permission_denials": [], "errors": [.string(message)],
+      "modelUsage": [:], "permission_denials": [], "errors": [.string(message)],
     ])
     throw SessionExit(code: 1, stderr: message)
   }
 
   func nextUserTurn() async throws -> String? {
+    if !queuedTurns.isEmpty { return queuedTurns.removeFirst() }
     while true {
       switch await inbox.next() {
       case .eof: return nil
@@ -121,38 +159,55 @@ final class ClaudeWire: Wire {
       case .hook: continue
       case .frame(let frame):
         if frame["type"] == "user" { return Self.text(of: frame["message"]?["content"]) }
-        if frame["type"] == "control_request" { answerIdleControl(frame) }
+        if frame["type"] == "control_request" { answerControl(frame) }
       }
     }
   }
 
   func openTurn(selfStarted: Bool) async throws {
     turnText = ""
+    denials = []
     state("running")
     guard !sentInit else { return }
     sentInit = true
     write([
       "type": "system", "subtype": "init", "cwd": .string(FileManager.default.currentDirectoryPath),
       "tools": ["AskUserQuestion", "Bash", "Edit", "Read", "Write"], "mcp_servers": [],
-      "model": "claude-fake", "permissionMode": .string(launch.permissionMode), "apiKeySource": "none",
-      "claude_code_version": "2.1.306", "output_style": "default",
+      "model": "claude-fake", "permissionMode": .string(permissionMode), "apiKeySource": "none",
+      "claude_code_version": .string(version), "output_style": "default", "slash_commands": [], "skills": [],
+      "plugins": [], "capabilities": Self.capabilities,
     ])
   }
 
+  /// With partial messages, the stream events of one text block. The assistant message goes out when
+  /// the block ends, before `content_block_stop`, which is why its `stop_reason` is still null.
   func stream(_ chunks: [String]) async throws {
-    if launch.includesPartialMessages {
-      for chunk in chunks {
-        write([
-          "type": "stream_event", "parent_tool_use_id": nil,
-          "event": [
-            "type": "content_block_delta", "index": 0,
-            "delta": ["type": "text_delta", "text": .string(chunk)],
-          ],
-        ])
-      }
-    }
     turnText = chunks.joined()
-    write(assistant([["type": "text", "text": .string(turnText)]], model: "claude-fake", stopReason: nil))
+    let id = ids.next("msg")
+    let message = assistant(
+      [["type": "text", "text": .string(turnText)]], id: id, model: "claude-fake", stopReason: nil)
+    guard launch.includesPartialMessages else { return write(message) }
+    event([
+      "type": "message_start",
+      "message": [
+        "id": .string(id), "type": "message", "role": "assistant", "model": "claude-fake", "content": [],
+        "stop_reason": nil, "usage": Self.usage,
+      ],
+    ])
+    event(["type": "content_block_start", "index": 0, "content_block": ["type": "text", "text": ""]])
+    for chunk in chunks {
+      event([
+        "type": "content_block_delta", "index": 0, "delta": ["type": "text_delta", "text": .string(chunk)],
+      ])
+    }
+    write(message)
+    event(["type": "content_block_stop", "index": 0])
+    event(["type": "message_delta", "delta": ["stop_reason": "end_turn"], "usage": ["output_tokens": 0]])
+    event(["type": "message_stop"])
+  }
+
+  private func event(_ event: JSONValue) {
+    write(["type": "stream_event", "parent_tool_use_id": nil, "event": event])
   }
 
   func closeTurn(_ ending: TurnEnding) async throws {
@@ -160,11 +215,12 @@ final class ClaudeWire: Wire {
     case .completed:
       write(result("success", isError: false, ["result": .string(turnText), "stop_reason": "end_turn"]))
     case .interrupted:
-      write(result("error_during_execution", isError: true, ["stop_reason": nil]))
+      write(result("error_during_execution", isError: true, ["stop_reason": nil, "errors": []]))
     case .failed(.notLoggedIn):
       let text = "Not logged in · Please run /login"
       var frame = assistant(
-        [["type": "text", "text": .string(text)]], model: "<synthetic>", stopReason: "stop_sequence")
+        [["type": "text", "text": .string(text)]], id: ids.next("msg"), model: "<synthetic>",
+        stopReason: "stop_sequence")
       frame["error"] = "authentication_failed"
       frame["is_api_error_message"] = true
       write(frame)
@@ -179,6 +235,13 @@ final class ClaudeWire: Wire {
   private enum Route {
     case permission(tool: String, input: JSONValue, suggestions: [JSONValue])
     case elicitation(JSONValue, fields: [String]?)
+
+    var hookEvent: String {
+      switch self {
+      case .permission: "PermissionRequest"
+      case .elicitation: "Elicitation"
+      }
+    }
   }
 
   func ask(_ ask: Ask) async throws -> Reply {
@@ -190,14 +253,15 @@ final class ClaudeWire: Wire {
       write(
         assistant(
           [["type": "tool_use", "id": .string(id), "name": .string(tool), "input": input]],
-          model: "claude-fake",
-          stopReason: "tool_use"))
+          id: ids.next("msg"), model: "claude-fake", stopReason: "tool_use"))
     }
-    state("requires_action")
+    denied = false
     denial = nil
     let reply = try await answer(route, toolUseID: toolUseID)
+    if denied, let toolUseID, case .permission(let tool, let input, _) = route {
+      denials.append(["tool_name": .string(tool), "tool_use_id": .string(toolUseID), "tool_input": input])
+    }
     guard reply != .interrupted else { return reply }
-    state("running")
     if let toolUseID {
       let declined = reply == .declined
       write([
@@ -271,6 +335,8 @@ final class ClaudeWire: Wire {
         ], fields: nil)
     case .computerUse:
       throw SessionExit(code: 2, stderr: "fake claude: computer use approvals are not a Claude scenario")
+    case .mcpUnknownMode:
+      throw SessionExit(code: 2, stderr: "fake claude: unknown elicitation modes are not a Claude scenario")
     }
   }
 
@@ -287,18 +353,16 @@ final class ClaudeWire: Wire {
     var hookBody: [String: JSONValue] = [
       "session_id": .string(sessionID), "transcript_path": .string("/tmp/fake-claude/\(sessionID).jsonl"),
       "cwd": .string(FileManager.default.currentDirectoryPath),
-      "permission_mode": .string(launch.permissionMode),
+      "permission_mode": .string(permissionMode), "hook_event_name": .string(route.hookEvent),
     ]
     switch route {
     case .permission(let tool, let input, let suggestions):
       hookURL = launch.permissionHook
-      hookBody["hook_event_name"] = "PermissionRequest"
       hookBody["tool_name"] = .string(tool)
       hookBody["tool_input"] = input
       if !suggestions.isEmpty { hookBody["permission_suggestions"] = .array(suggestions) }
     case .elicitation(let fields, _):
       hookURL = launch.elicitationHook
-      hookBody["hook_event_name"] = "Elicitation"
       hookBody.merge(fields.object ?? [:]) { _, new in new }
     }
     var hook: Task<Void, Never>?
@@ -311,6 +375,7 @@ final class ClaudeWire: Wire {
           if let data, let reply = try decode(route, hookOutput: try? JSONValue(data: data)) { return reply }
         case .frame(let frame):
           if let interrupt = interruptID(frame) { return interrupted(interrupt, cancelling: nil) }
+          receiveWhileAsking(frame)
           continue
         case .eof: throw SessionExit(code: 0, stderr: "")
         case .malformed: continue
@@ -330,15 +395,30 @@ final class ClaudeWire: Wire {
     case .elicitation(let fields, _):
       request = (fields.object ?? [:]).merging(["subtype": "elicitation"]) { _, new in new }
     }
+    // Only the stdio request makes the session wait on the host; a pending hook does not.
+    state("requires_action")
     write(["type": "control_request", "request_id": .string(requestID), "request": .object(request)])
     while true {
       switch await inbox.next() {
       case .frame(let frame):
         if let interrupt = interruptID(frame) { return interrupted(interrupt, cancelling: requestID) }
         guard frame["type"] == "control_response", frame["response"]?["request_id"]?.string == requestID
-        else { continue }
-        guard frame["response"]?["subtype"] == "success" else { return .declined }
-        return try decode(route, decision: frame["response"]?["response"]) ?? .declined
+        else {
+          receiveWhileAsking(frame)
+          continue
+        }
+        let decision = frame["response"]?["response"]
+        if case .permission = route, decision?["behavior"] == "deny", decision?["message"]?.string == nil {
+          throw SessionExit(code: 2, stderr: "fake claude: a can_use_tool deny without a message")
+        }
+        let reply: Reply =
+          if frame["response"]?["subtype"] == "success" {
+            try decode(route, decision: decision) ?? .declined
+          } else {
+            .declined
+          }
+        if reply != .interrupted { state("running") }
+        return reply
       case .eof: throw SessionExit(code: 0, stderr: "")
       case .hook, .malformed: continue
       }
@@ -346,9 +426,16 @@ final class ClaudeWire: Wire {
   }
 
   private func decode(_ route: Route, hookOutput: JSONValue?) throws -> Reply? {
-    let output = hookOutput?["hookSpecificOutput"]
+    guard let output = hookOutput?["hookSpecificOutput"] else { return nil }
+    guard output["hookEventName"]?.string == route.hookEvent else {
+      throw SessionExit(
+        code: 2,
+        stderr:
+          "fake claude: bad hook output: hookEventName is \(output["hookEventName"]?.text ?? "missing"), "
+          + "expected \(route.hookEvent)")
+    }
     switch route {
-    case .permission: return try decode(route, decision: output?["decision"])
+    case .permission: return try decode(route, decision: output["decision"])
     case .elicitation: return try decode(route, decision: output)
     }
   }
@@ -360,15 +447,23 @@ final class ClaudeWire: Wire {
     case .permission(_, let input, let suggestions):
       switch decision["behavior"]?.string {
       case "deny":
+        denied = true
         denial = decision["message"]?.string
-        return .declined
+        return decision["interrupt"] == true ? .interrupted : .declined
       case "allow":
         if let granted = decision["updatedPermissions"]?.array,
           !granted.allSatisfy(suggestions.contains)
         {
           throw SessionExit(code: 2, stderr: "fake claude: updatedPermissions is not an offered suggestion")
         }
-        guard let answers = decision["updatedInput"]?["answers"] else { return .approved }
+        guard let updated = decision["updatedInput"] else { return .approved }
+        // The host may add answers; every other field must stay as the tool asked.
+        var kept = updated.object ?? [:]
+        let answers = kept.removeValue(forKey: "answers")
+        guard JSONValue.object(kept) == input else {
+          throw SessionExit(code: 2, stderr: "fake claude: updatedInput changes the tool input")
+        }
+        guard let answers else { return .approved }
         let questions = input["questions"]?.array ?? []
         return .answered(questions.compactMap { answers[$0["question"]?.string ?? ""]?.string })
       default: return nil
@@ -409,26 +504,40 @@ final class ClaudeWire: Wire {
     return .interrupted
   }
 
-  private func answerIdleControl(_ frame: JSONValue) {
+  /// A user message waits for the next turn; a control request is answered as it is when idle.
+  private func receiveWhileAsking(_ frame: JSONValue) {
+    if frame["type"] == "user" { queuedTurns.append(Self.text(of: frame["message"]?["content"])) }
+    if frame["type"] == "control_request" { answerControl(frame) }
+  }
+
+  private func answerControl(_ frame: JSONValue) {
     let requestID = frame["request_id"]?.string ?? ""
     switch frame["request"]?["subtype"]?.string {
     case "interrupt": respond(to: requestID, ["still_queued": []])
     case "initialize": respond(to: requestID, ["commands": [], "output_style": "default"])
-    case let subtype:
-      write([
-        "type": "control_response",
-        "response": [
-          "subtype": "error", "request_id": .string(requestID),
-          "error": .string("fake claude: unsupported control request \(subtype ?? "")"),
-        ],
-      ])
+    case "set_permission_mode":
+      let mode = frame["request"]?["mode"]?.string ?? ""
+      guard ClaudeLaunch.permissionModes.contains(mode) else {
+        let modes = ClaudeLaunch.permissionModes.joined(separator: ", ")
+        return refuse(requestID, "fake claude: invalid permission mode \(mode); valid modes are \(modes)")
+      }
+      permissionMode = mode
+      respond(to: requestID)
+    case "set_model": respond(to: requestID)
+    case let subtype: refuse(requestID, "fake claude: unsupported control request \(subtype ?? "")")
     }
   }
 
-  private func respond(to requestID: String, _ response: JSONValue) {
+  private func respond(to requestID: String, _ response: JSONValue? = nil) {
+    var payload: [String: JSONValue] = ["subtype": "success", "request_id": .string(requestID)]
+    payload["response"] = response
+    write(["type": "control_response", "response": .object(payload)])
+  }
+
+  private func refuse(_ requestID: String, _ error: String) {
     write([
       "type": "control_response",
-      "response": ["subtype": "success", "request_id": .string(requestID), "response": response],
+      "response": ["subtype": "error", "request_id": .string(requestID), "error": .string(error)],
     ])
   }
 
@@ -446,12 +555,13 @@ final class ClaudeWire: Wire {
     write(["type": "system", "subtype": "session_state_changed", "state": .string(state)])
   }
 
-  private func assistant(_ content: [JSONValue], model: String, stopReason: JSONValue) -> [String: JSONValue]
-  {
+  private func assistant(
+    _ content: [JSONValue], id: String, model: String, stopReason: JSONValue
+  ) -> [String: JSONValue] {
     [
       "type": "assistant", "parent_tool_use_id": nil,
       "message": [
-        "id": .string(ids.next("msg")), "type": "message", "role": "assistant", "model": .string(model),
+        "id": .string(id), "type": "message", "role": "assistant", "model": .string(model),
         "content": .array(content), "stop_reason": stopReason,
         "usage": Self.usage,
       ],
@@ -463,7 +573,7 @@ final class ClaudeWire: Wire {
     [
       "type": "result", "subtype": .string(subtype), "is_error": .bool(isError), "duration_ms": 0,
       "duration_api_ms": 0, "num_turns": 1, "total_cost_usd": 0, "usage": Self.usage,
-      "permission_denials": [],
+      "modelUsage": [:], "permission_denials": .array(denials),
     ].merging(fields) { _, new in new }
   }
 

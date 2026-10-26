@@ -19,15 +19,18 @@ struct FakeCase: Sendable, CustomTestStringConvertible {
   }
 
   private static func choices(_ scenario: Scenario, _ provider: Provider) -> [HostChoice] {
-    let stdio: [HostChoice] = provider == .claude ? [.answerOnStdio] : []
+    let stdio: [HostChoice] = provider == .claude ? [.answerOnStdio, .declineOnStdio, .interruptOnStdio] : []
     switch asks(scenario.script ?? []).first {
     case .command?, .fileChange?, .chromeSite?, .computerUse?:
       return [.approve, .approveForSession, .decline, .interrupt] + stdio
     case .question?, .mcpForm?, .mcpSignIn?:
       return [.approve, .decline, .interrupt] + stdio
+    case .mcpUnknownMode?:
+      return [.decline, .interrupt]
     case nil:
       switch scenario.id {
-      case .streamedReply: return provider == .claude ? [.main, .resume, .plainOutput] : [.main, .resume]
+      case .streamedReply:
+        return provider == .claude ? [.main, .resume, .plainOutput, .idleControl] : [.main, .resume]
       case .lostSession: return [.main, .resume]
       default: return [.main]
       }
@@ -48,6 +51,35 @@ struct FakeAgentTests {
     let transcript = try #require(
       Transcripts.expected(for: c.scenario, provider: c.provider, choice: c.choice))
     try await FakeHost.play(transcript, as: c.provider, c.scenario, fakes: FakeAgents.shared())
+  }
+
+  @Test(arguments: ClaudeEdge.allCases)
+  func `Claude answers host input outside the choice matrix`(_ edge: ClaudeEdge) async throws {
+    try await FakeHost.play(
+      Transcripts.expected(for: edge), as: .claude, .commandApproval, fakes: FakeAgents.shared())
+  }
+
+  @Test(arguments: CodexEdge.allCases)
+  func `Codex refuses host requests outside the contract`(_ edge: CodexEdge) async throws {
+    try await FakeHost.play(
+      Transcripts.expected(for: edge), as: .codex, edge.scenario, fakes: FakeAgents.shared())
+  }
+
+  @Test func `a transcript that does not end with an exit fails`() async throws {
+    let fakes = try FakeAgents.shared()
+    await withKnownIssue {
+      try await FakeHost.play(HostTranscript(moves: [.closeInput]), as: .claude, .streamedReply, fakes: fakes)
+    }
+  }
+
+  @Test(arguments: FakeCase.all.filter { $0.choice == .main || $0.choice == .approve })
+  func `writes the same bytes on every run`(_ c: FakeCase) async throws {
+    let transcript = try #require(
+      Transcripts.expected(for: c.scenario, provider: c.provider, choice: c.choice))
+    let first = try await FakeHost.play(transcript, as: c.provider, c.scenario, fakes: FakeAgents.shared())
+    let second = try await FakeHost.play(transcript, as: c.provider, c.scenario, fakes: FakeAgents.shared())
+    #expect(!first.isEmpty)
+    #expect(first == second)
   }
 
   @Test(arguments: Provider.allCases, Scenario.all.map(\.id))
@@ -85,6 +117,19 @@ struct FakeAgentTests {
         "--settings", "{}", "--permission-mode", "default",
       ], 2, "--permission-prompt-tool stdio"
     ),
+    (
+      [
+        "-p", "--verbose", "--input-format", "stream-json", "--output-format", "stream-json", "--session-id",
+        FakeHost.sessionID, "--settings", "{}", "--permission-mode", "yolo", "--permission-prompt-tool",
+        "stdio",
+      ], 1, "Allowed choices are default, acceptEdits, auto, bypassPermissions, dontAsk, plan"
+    ),
+    (
+      [
+        "-p", "--verbose", "--input-format", "stream-json", "--output-format", "stream-json", "--session-id",
+        "x", "--settings", "{}", "--permission-mode", "default", "--permission-prompt-tool", "stdio",
+      ], 1, "Must be a valid UUID"
+    ),
   ])
   func `Claude refuses a launch that breaks the contract`(
     _ arguments: [String], _ code: Int32, _ message: String
@@ -103,10 +148,20 @@ struct FakeAgentTests {
     #expect(got.stderr.contains("only answers health"))
   }
 
-  @Test func `Codex refuses a launch without app-server`() throws {
-    let got = try ProcessRun.run(FakeAgents.shared().path(.codex, .streamedReply), ["exec"])
-    #expect(got.exitCode == 2)
-    #expect(got.stderr.contains("missing the app-server subcommand"))
+  /// Global options may come before the subcommand; a value that reads `app-server` is still a value.
+  static let codexLaunches: [([String], Int32)] = [
+    (["app-server"], 0), (["-c", "k=v", "--enable", "f", "app-server"], 0),
+    (["--config", "k=v", "--disable", "f", "-p", "work", "--profile", "work", "app-server"], 0),
+    (["exec"], 2), (["exec", "app-server"], 2), (["-c", "app-server"], 2), (["--enable", "app-server"], 2),
+  ]
+
+  @Test(arguments: codexLaunches)
+  func `Codex needs app-server as the first argument that is not an option`(
+    _ arguments: [String], _ code: Int32
+  ) throws {
+    let got = try ProcessRun.run(FakeAgents.shared().path(.codex, .streamedReply), arguments)
+    #expect(got.exitCode == code)
+    #expect(got.stderr.contains("missing the app-server subcommand") == (code != 0))
     #expect(got.stdout.isEmpty)
   }
 }
@@ -145,12 +200,13 @@ enum HealthTable {
       return [(["--version"], ("2.1.306 (Claude Code)\n", "", 0)), (["auth", "status"], unreadable)]
     case (.codex, .available):
       return [
-        (["--version"], ("codex-cli 0.164.0\n", "", 0)),
+        (["--version"], ("codex-cli 0.164.0-alpha.11.1\n", "", 0)),
         (["login", "status"], ("", "Logged in using ChatGPT\n", 0)),
       ]
     case (.codex, .loggedOut):
       return [
-        (["--version"], ("codex-cli 0.164.0\n", "", 0)), (["login", "status"], ("", "Not logged in\n", 1)),
+        (["--version"], ("codex-cli 0.164.0-alpha.11.1\n", "", 0)),
+        (["login", "status"], ("", "Not logged in\n", 1)),
       ]
     case (.codex, .belowMinimumVersion):
       return [
@@ -158,7 +214,7 @@ enum HealthTable {
         (["login", "status"], ("", "Logged in using ChatGPT\n", 0)),
       ]
     case (.codex, .needsAttention):
-      return [(["--version"], ("codex-cli 0.164.0\n", "", 0)), (["login", "status"], unreadable)]
+      return [(["--version"], ("codex-cli 0.164.0-alpha.11.1\n", "", 0)), (["login", "status"], unreadable)]
     }
   }
 }

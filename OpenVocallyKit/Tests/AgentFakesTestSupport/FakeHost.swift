@@ -23,9 +23,10 @@ package enum HostMove: Sendable {
 package struct HostLaunch: Sendable {
   package var resume: String?
   package var partialMessages = true
-  package var sessionStateEvents = true
+  /// The value of `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS`, or `nil` to leave it unset.
+  package var sessionStateEvents: String?
 
-  package init(resume: String? = nil, partialMessages: Bool = true, sessionStateEvents: Bool = true) {
+  package init(resume: String? = nil, partialMessages: Bool = true, sessionStateEvents: String? = "1") {
     self.resume = resume
     self.partialMessages = partialMessages
     self.sessionStateEvents = sessionStateEvents
@@ -48,10 +49,18 @@ package struct HostTranscript: Sendable {
 package enum FakeHost {
   package static let sessionID = "11111111-1111-4111-8111-111111111111"
 
+  /// Returns the fake's stdout with the per-run working directory replaced by `<cwd>`, so two runs can
+  /// be compared byte for byte.
+  @discardableResult
   package static func play(
     _ transcript: HostTranscript, as provider: Provider, _ scenario: ScenarioID, fakes: FakeAgents,
     timeout: Duration = .seconds(5), sourceLocation: SourceLocation = #_sourceLocation
-  ) async throws {
+  ) async throws -> String {
+    // Only an exit move drains stdout to the end, so without one a stray frame would go unchecked.
+    guard case .exit = transcript.moves.last else {
+      Issue.record("the transcript must end with .exit", sourceLocation: sourceLocation)
+      return ""
+    }
     let hooks = try await HookServer.start()
     let directory = FileManager.default.temporaryDirectory.appending(path: "fake-host-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -66,7 +75,7 @@ package enum FakeHost {
       let settings = directory.appending(path: "settings.json")
       try hooks.settings.data.write(to: settings)
       process.arguments = claudeArguments(transcript.launch, settings: settings)
-      environment["CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS"] = transcript.launch.sessionStateEvents ? "1" : nil
+      environment["CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS"] = transcript.launch.sessionStateEvents
     case .codex:
       process.arguments = ["app-server"]
     }
@@ -106,6 +115,7 @@ package enum FakeHost {
     }
 
     var captures: [String: JSONValue] = [:]
+    var stdout = Data()
     var openRequests: [HookRequest] = []
     for (index, move) in transcript.moves.enumerated() {
       let failure: String?
@@ -123,6 +133,7 @@ package enum FakeHost {
           failure = "expected \(pattern)\n  but \(closed())"
           break
         }
+        stdout += line + Data([0x0A])
         failure = FramePattern.check(pattern, line, captures: &captures)
       case .hook(let path, let body, let answer):
         guard let request = await requests.next(isolation: #isolation) else {
@@ -143,6 +154,7 @@ package enum FakeHost {
         failure = nil
       case .exit(let code, let expectedError):
         if let line = await lines.next(isolation: #isolation) {
+          stdout += line + Data([0x0A])
           failure =
             "expected the fake to exit, got an unexpected frame\n  frame: \(String(decoding: line, as: UTF8.self))"
           break
@@ -165,6 +177,15 @@ package enum FakeHost {
       }
     }
     for request in openRequests { request.drop() }
+    // The fake reports getcwd, which resolves the temporary directory's /var symlink.
+    let paths = [directory.resolvingSymlinksInPath(), directory].map {
+      var path = $0.path(percentEncoded: false)
+      if path.hasSuffix("/") { path.removeLast() }
+      return path
+    }
+    return paths.reduce(String(decoding: stdout, as: UTF8.self)) {
+      $0.replacingOccurrences(of: $1, with: "<cwd>")
+    }
   }
 
   private static func claudeArguments(_ launch: HostLaunch, settings: URL) -> [String] {

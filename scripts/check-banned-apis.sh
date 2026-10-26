@@ -11,7 +11,8 @@ UserDefaults. Fails on a concurrency escape hatch (@preconcurrency, nonisolated(
 script that resets permissions or matches processes by name unless the line ends with
 "# allowed: <reason>". Fails on MenuBarExtra(isInserted:) bound to a projected value.
 Fails on composedMessage, and on OSLogStore or import OSLog outside
-OpenVocallyKit/Sources/Diagnostics/LogArchive.swift.
+OpenVocallyKit/Sources/Diagnostics/LogArchive.swift. Fails when a target other than FakeAgentCLI,
+AgentFakesTestSupport and AgentFakesTests depends on AgentFakes in OpenVocallyKit/Package.swift.
 EOF
   exit 0
 fi
@@ -64,6 +65,42 @@ fi
 if grep -rnE 'OSLogStore|^[[:space:]]*import[[:space:]]+OSLog\b' --include='*.swift' App/Sources OpenVocallyKit/Sources OpenVocallyKit/Tests \
   | grep -v '^OpenVocallyKit/Sources/Diagnostics/LogArchive\.swift:'; then
   echo "Read logs only through Diagnostics/LogArchive.swift, which redacts each entry as it reads it." >&2
+  exit 1
+fi
+
+# Splits the targets array at its top-level commas, so a dependency list that spans several lines,
+# or names AgentFakes as .target(name:) or .product(name:), still belongs to its target. A target's
+# first name: is its own.
+if ! python3 -I - OpenVocallyKit/Package.swift <<'PY'
+import re, sys
+text = re.sub(r"(?m)^\s*//.*$", "", open(sys.argv[1]).read())
+blocks, current, depth, quoted = [], "", 0, False
+for ch in text[re.search(r"(?m)^\s*targets:\s*\[", text).end():]:
+    if ch == '"':
+        quoted = not quoted
+    elif not quoted and ch in "([":
+        depth += 1
+    elif not quoted and ch in ")]":
+        if depth == 0:
+            break
+        depth -= 1
+    elif not quoted and ch == "," and depth == 0:
+        blocks.append(current)
+        current = ""
+        continue
+    current += ch
+blocks.append(current)
+allowed = {"AgentFakes", "FakeAgentCLI", "AgentFakesTestSupport", "AgentFakesTests"}
+found = False
+for block in blocks:
+    name = re.search(r'name:\s*"([^"]+)"', block)
+    if name and name.group(1) not in allowed and '"AgentFakes"' in block[name.end():]:
+        print(f"OpenVocallyKit/Package.swift: target {name.group(1)} depends on AgentFakes")
+        found = True
+sys.exit(1 if found else 0)
+PY
+then
+  echo "AgentFakes is a test double. Only FakeAgentCLI, AgentFakesTestSupport and AgentFakesTests may depend on it in OpenVocallyKit/Package.swift." >&2
   exit 1
 fi
 

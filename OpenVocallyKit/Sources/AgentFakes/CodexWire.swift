@@ -1,4 +1,4 @@
-// Frames checked against codex-cli 0.164.0-alpha and its `app-server generate-ts` bindings; the
+// Frames checked against codex-cli 0.164.0-alpha.11.1 and its `app-server generate-ts` bindings; the
 // handshake, turn, interrupt, logged-out and lost-session frames were recorded from it.
 
 import Foundation
@@ -13,6 +13,7 @@ final class CodexWire: Wire {
   private let cliVersion: String
   private var ids = Ids()
   private var nextRequestID = 0
+  private var answeredInitialize = false
   private var initialized = false
   private var threadID = ""
   private var turnID = ""
@@ -25,17 +26,40 @@ final class CodexWire: Wire {
 
   static func encodes(_ ask: Ask) -> Bool {
     switch ask {
-    case .command, .fileChange, .computerUse, .mcpForm, .mcpSignIn: true
+    case .command, .fileChange, .computerUse, .mcpForm, .mcpSignIn, .mcpUnknownMode: true
     case .chromeSite, .question: false
     }
   }
 
   init(arguments: [String], health: HealthProfile, inbox: Inbox) throws {
-    guard arguments.first == "app-server" else {
+    guard Self.subcommand(arguments) == "app-server" else {
       throw SessionExit(code: 2, stderr: "fake codex: the launch is missing the app-server subcommand")
     }
     self.inbox = inbox
-    cliVersion = health == .belowMinimumVersion ? "0.150.0" : "0.164.0"
+    cliVersion = Self.version(health)
+  }
+
+  /// Global options that take a value, so the word after one is never the subcommand.
+  private static let valueOptions: Set<String> = [
+    "-c", "--config", "--enable", "--disable", "-p", "--profile",
+  ]
+
+  /// The first argument that is neither an option nor an option's value.
+  private static func subcommand(_ arguments: [String]) -> String? {
+    var rest = arguments[...]
+    while let argument = rest.popFirst() {
+      if valueOptions.contains(argument) {
+        rest = rest.dropFirst()
+      } else if !argument.hasPrefix("-") {
+        return argument
+      }
+    }
+    return nil
+  }
+
+  /// The measured version is a prerelease, so a host's version check must parse one.
+  static func version(_ health: HealthProfile) -> String {
+    health == .belowMinimumVersion ? "0.150.0" : "0.164.0-alpha.11.1"
   }
 
   func start(resume: ResumeBehavior) async throws {
@@ -53,8 +77,14 @@ final class CodexWire: Wire {
           respondError(id, code: -32600, "thread not found: \(frame["params"]?["threadId"]?.string ?? "")")
           continue
         }
+        let input = frame["params"]?["input"]?.array ?? []
+        // The bindings require `text_elements` on a text item, though codex 0.164 defaults it.
+        guard input.allSatisfy({ $0["type"] != "text" || $0["text_elements"]?.array != nil }) else {
+          respondError(id, code: -32602, "Invalid params: missing field `text_elements`")
+          continue
+        }
         pendingTurnStart = id
-        userText = (frame["params"]?["input"]?.array ?? []).compactMap { $0["text"]?.string }.joined()
+        userText = input.compactMap { $0["text"]?.string }.joined()
         return userText
       }
       try handleIdle(frame, resume: .resumes)
@@ -185,6 +215,12 @@ final class CodexWire: Wire {
         "serverName": .string(server), "mode": "url", "message": .string("Sign in to \(server)"),
         "_meta": nil, "url": .string(url), "elicitationId": .string(ids.next("elicitation")),
       ]) { _, new in new }
+    case .mcpUnknownMode(let server, let mode, let message):
+      method = "mcpServer/elicitation/request"
+      params.merge([
+        "serverName": .string(server), "mode": .string(mode), "message": .string(message), "_meta": nil,
+        "requestedSchema": ["type": "object", "properties": [:]],
+      ]) { _, new in new }
     case .chromeSite, .question:
       throw SessionExit(code: 2, stderr: "fake codex: this ask is not a Codex scenario")
     }
@@ -201,6 +237,10 @@ final class CodexWire: Wire {
     while true {
       guard let frame = try await nextFrame() else { throw SessionExit(code: 0, stderr: "") }
       if frame["method"] == "turn/interrupt", let id = frame["id"] {
+        if let refusal = interruptRefusal(frame["params"]) {
+          respondError(id, code: -32600, refusal)
+          continue
+        }
         respond(id, [:])
         notify("serverRequest/resolved", ["threadId": .string(threadID), "requestId": requestID])
         return .interrupted
@@ -247,9 +287,25 @@ final class CodexWire: Wire {
       case "decline", "cancel": return .declined
       default: throw bad()
       }
+    case .mcpUnknownMode:
+      // The spec: a host declines an elicitation mode it cannot render.
+      guard result["action"]?.string == "decline" else { throw bad() }
+      return .declined
     case .chromeSite, .question:
       throw bad()
     }
+  }
+
+  /// The refusals codex 0.164 gives an interrupt that does not name the active turn.
+  private func interruptRefusal(_ params: JSONValue?) -> String? {
+    if let missing = ["threadId", "turnId"].first(where: { params?[$0]?.string == nil }) {
+      return "Invalid request: missing field `\(missing)`"
+    }
+    let thread = params?["threadId"]?.string ?? ""
+    let turn = params?["turnId"]?.string ?? ""
+    if thread != threadID { return "thread not found: \(thread)" }
+    if turn != turnID { return "expected active turn id \(turn) but found \(turnID)" }
+    return nil
   }
 
   private static func diff(_ old: String, _ new: String) -> String {
@@ -272,6 +328,11 @@ final class CodexWire: Wire {
     }
     switch method {
     case "initialize":
+      guard !answeredInitialize else {
+        respondError(id, code: -32600, "Already initialized")
+        return
+      }
+      answeredInitialize = true
       let client = frame["params"]?["clientInfo"]
       let name = client?["name"]?.string ?? ""
       let version = client?["version"]?.string ?? ""
@@ -287,14 +348,24 @@ final class CodexWire: Wire {
           "status": "disabled", "serverName": "fake-host", "installationId": .string(Self.installationID),
           "environmentId": nil,
         ])
-    case "thread/start":
-      openThread(id, ids.uuid(), started: true)
-    case "thread/resume":
-      let requested = frame["params"]?["threadId"]?.string ?? ""
+    case "thread/start", "thread/resume":
+      let params = frame["params"]
+      let sandbox: JSONValue
+      do {
+        sandbox = try Self.sandboxPolicy(method, params)
+      } catch {
+        respondError(id, code: -32602, error.message)
+        return
+      }
+      guard method == "thread/resume" else {
+        openThread(id, ids.uuid(), sandbox: sandbox, resumed: false)
+        return
+      }
+      let requested = params?["threadId"]?.string ?? ""
       if resume == .sessionLost {
         respondError(id, code: -32600, "no rollout found for thread id \(requested)")
       } else {
-        openThread(id, requested, started: false)
+        openThread(id, requested, sandbox: sandbox, resumed: true)
       }
     case "turn/interrupt":
       respondError(id, code: -32600, "no active turn to interrupt")
@@ -303,23 +374,59 @@ final class CodexWire: Wire {
     }
   }
 
-  private func openThread(_ requestID: JSONValue, _ id: String, started: Bool) {
+  private struct Refusal: Error {
+    let message: String
+  }
+
+  /// The policy a thread response reports for the requested sandbox mode. Refuses a request that
+  /// breaks the spec's contract: every approval goes to the user, decided per request.
+  private static func sandboxPolicy(_ method: String, _ params: JSONValue?) throws(Refusal) -> JSONValue {
+    for (key, expected) in [("approvalPolicy", "on-request"), ("approvalsReviewer", "user")] {
+      let value = params?[key]
+      if value?.string != expected {
+        let got = value.map { ", got \($0.text)" } ?? ""
+        throw Refusal(message: "Invalid params: \(method) needs \(key) \"\(expected)\"\(got)")
+      }
+    }
+    switch params?["sandbox"] {
+    case nil, .null?, .string("workspace-write")?:
+      return [
+        "type": "workspaceWrite", "writableRoots": [], "networkAccess": false, "excludeTmpdirEnvVar": false,
+        "excludeSlashTmp": false,
+      ]
+    case .string("read-only")?: return ["type": "readOnly", "networkAccess": false]
+    case .string("danger-full-access")?: return ["type": "dangerFullAccess"]
+    case let other?: throw Refusal(message: "Invalid params: unknown sandbox mode \(other.text)")
+    }
+  }
+
+  /// Carries every field the generated bindings mark required, with synthetic values and `null`
+  /// wherever the type allows it.
+  private func openThread(_ requestID: JSONValue, _ id: String, sandbox: JSONValue, resumed: Bool) {
     threadID = id
     let cwd = JSONValue.string(FileManager.default.currentDirectoryPath)
+    let epoch = JSONValue.number(Double(Self.epochSeconds))
     let thread: JSONValue = [
-      "id": .string(id), "sessionId": .string(id), "preview": "", "ephemeral": false,
-      "modelProvider": "openai", "model": "fake-model", "createdAt": .number(Double(Self.epochSeconds)),
-      "updatedAt": .number(Double(Self.epochSeconds)), "status": ["type": "idle"], "cwd": cwd,
-      "cliVersion": .string(cliVersion), "source": "vscode", "turns": [],
+      "id": .string(id), "sessionId": .string(id), "forkedFromId": nil, "parentThreadId": nil, "preview": "",
+      "ephemeral": false, "section": nil, "sectionEnteredAt": nil, "projectId": nil,
+      "historyMode": "paginated",
+      "modelProvider": "openai", "model": "fake-model", "reasoningEffort": nil, "createdAt": epoch,
+      "updatedAt": epoch, "recencyAt": epoch, "status": ["type": "idle"], "path": nil, "cwd": cwd,
+      "cliVersion": .string(cliVersion), "originator": nil, "source": "vscode", "threadSource": nil,
+      "agentNickname": nil, "agentRole": nil, "gitInfo": nil, "name": nil, "turns": [],
     ]
-    respond(
-      requestID,
-      [
-        "thread": thread, "model": "fake-model", "modelProvider": "openai", "cwd": cwd,
-        "approvalPolicy": "on-request", "approvalsReviewer": "user",
-        "sandbox": ["type": "workspaceWrite", "writableRoots": [], "networkAccess": false],
-      ])
-    if started { notify("thread/started", ["thread": thread]) }
+    var result: [String: JSONValue] = [
+      "thread": thread, "model": "fake-model", "modelProvider": "openai", "serviceTier": nil,
+      "disabledPluginIds": [], "cwd": cwd, "instructionSources": [], "approvalPolicy": "on-request",
+      "approvalsReviewer": "user", "sandbox": sandbox, "reasoningEffort": nil,
+    ]
+    if resumed {
+      result.merge(["collaborationMode": nil, "turnsBackwardsCursor": nil, "itemsBackwardsCursor": nil]) {
+        _, new in new
+      }
+    }
+    respond(requestID, .object(result))
+    if !resumed { notify("thread/started", ["thread": thread]) }
   }
 
   /// The next stdin frame, or `nil` on EOF.

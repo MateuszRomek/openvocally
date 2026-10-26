@@ -24,6 +24,8 @@ package enum Ask: Sendable, Hashable {
   case question(header: String, question: String, options: [String])
   case mcpForm(server: String, message: String, fields: [FormField])
   case mcpSignIn(server: String, url: String)
+  /// An elicitation in a `mode` the host does not know. Only a decline is a valid answer.
+  case mcpUnknownMode(server: String, mode: String, message: String)
 
   package struct FormField: Sendable, Hashable {
     package let name: String

@@ -15,6 +15,8 @@ package enum ScenarioID: String, CaseIterable, Sendable, Hashable {
   case agentQuestion = "agent-question"
   case mcpForm = "mcp-form"
   case mcpSignIn = "mcp-sign-in"
+  /// An elicitation in a mode the host cannot render, which it must decline.
+  case mcpUnknownMode = "mcp-unknown-mode"
   case crashMidTurn = "crash-mid-turn"
   case loggedOut = "logged-out"
   case belowMinimumVersion = "below-minimum-version"
@@ -128,6 +130,15 @@ package struct Scenario: Sendable {
           declined: [.stream("Sign-in cancelled.", chunks: 1)]),
         .completeTurn,
       ])
+    case .mcpUnknownMode:
+      return session(
+        [
+          .awaitUserTurn,
+          .ask(
+            .mcpUnknownMode(server: "tickets", mode: "openai/form", message: "Fill in the ticket form"),
+            approved: [], declined: [.stream("Skipped the form.", chunks: 1)]),
+          .completeTurn,
+        ], only: [.codex])
     case .crashMidTurn:
       return session([
         .awaitUserTurn, .stream("Starting the work and then", chunks: 2),
