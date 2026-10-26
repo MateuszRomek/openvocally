@@ -100,6 +100,21 @@ extension ScreenGeometry {
       auxiliaryTopLeft: screen.auxiliaryTopLeftArea,
       auxiliaryTopRight: screen.auxiliaryTopRightArea)
   }
+
+  /// A display's own menu bar is the gap above its visible frame. An auto-hidden menu bar leaves
+  /// no gap, so `fallback` stands in.
+  func menuBarHeight(fallback: CGFloat) -> CGFloat {
+    let gap = frame.maxY - visibleFrame.maxY
+    return gap > 0 ? gap : fallback
+  }
+}
+
+enum MenuBarPresence {
+  /// The displays that have a menu bar, from `ordered` with the primary display first. Without
+  /// separate Spaces only the primary display has one.
+  static func displays<ID>(_ ordered: [ID], separateSpaces: Bool) -> [ID] {
+    separateSpaces ? ordered : Array(ordered.prefix(1))
+  }
 }
 
 /// The hardware notch in global screen points.

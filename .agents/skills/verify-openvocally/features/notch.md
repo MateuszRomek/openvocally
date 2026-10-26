@@ -27,7 +27,7 @@ Preconditions:
 ## Gotchas
 
 - The notch exists only in Debug builds, behind the compile-time flag `FEATURE_NOTCH`. Release builds draw the overlay instead.
-- A display without a hardware notch draws a simulated 185 by 32 point notch on its top edge, and nothing while hidden, so the `hidden` row of a contact sheet has no capture.
+- A display without a hardware notch draws a plain black notch 185 points wide at menu-bar height on its top edge, and nothing while hidden, so the `hidden` row of a contact sheet has no capture.
 - A built-in display has a notch only while the lid is open. With the lid closed, only the gallery's simulated geometry shows the hardware case.
 - `starting` turns into `connecting` after 300 ms, so the probe captures it early, and it can still be mid-fade.
 - Stills prove each scene's look only. Judging motion needs a recording or the user's eye.

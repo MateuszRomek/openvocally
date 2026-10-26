@@ -30,6 +30,7 @@ struct NotchDrawing: Equatable {
     var now = HostTime.now()
     var last: NotchFrame?
     let display = DisplayID(rawValue: 0)
+    _ = core.send(.displays(withMenuBar: [display]), at: now)
     _ = core.send(.pointer(movedOnto: display), at: now)
     for phase in phases {
       last = core.send(.dictation(phase), at: now).frames[display] ?? last
@@ -67,12 +68,23 @@ struct NotchPlacement: Equatable, Sendable {
   /// A real notch hides the hidden shape behind the camera; without one, hidden draws nothing.
   let hardware: Bool
 
-  @MainActor init(_ screen: NSScreen) {
-    if let notch = NotchGeometry(ScreenGeometry(screen)) {
+  @MainActor init(_ screen: NSScreen, fallbackMenuBarHeight: CGFloat) {
+    self.init(ScreenGeometry(screen), fallbackMenuBarHeight: fallbackMenuBarHeight)
+  }
+
+  /// `fallbackMenuBarHeight` sizes the notch on a display whose menu bar leaves no gap above
+  /// its visible frame, such as an auto-hidden one.
+  init(_ screen: ScreenGeometry, fallbackMenuBarHeight: CGFloat) {
+    if let notch = NotchGeometry(screen) {
       self.init(notch: notch, hardware: true)
     } else {
       self.init(
-        notch: NotchGeometry(size: OverlayMetrics.notchSimulated, midX: screen.frame.midX), hardware: false)
+        notch: NotchGeometry(
+          size: CGSize(
+            width: OverlayMetrics.notchSimulated.width,
+            height: screen.menuBarHeight(fallback: fallbackMenuBarHeight)),
+          midX: screen.frame.midX),
+        hardware: false)
     }
   }
 

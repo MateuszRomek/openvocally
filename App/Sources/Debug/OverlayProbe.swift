@@ -120,9 +120,11 @@
             let settle = ["connecting": 1000, "starting": 150][scene] ?? 600
             try? await Task.sleep(for: .milliseconds(settle))
             let shown = overlay.shownPanel
+            let drawn = overlay.drawnDisplays.map(String.init).joined(separator: ",")
             logger.info(
               """
               notch probe shown \(scene, privacy: .public) display \(shown.map { String($0.display) } ?? "none", privacy: .public) \
+              drawn \(drawn.isEmpty ? "none" : drawn, privacy: .public) \
               window \(shown.map { String($0.window) } ?? "none", privacy: .public)
               """)
           }

@@ -31,6 +31,9 @@ import Overlay
       let defaults = UserDefaults.standard
       let reduceMotion =
         defaults.object(forKey: "notchReduceMotion") == nil ? nil : defaults.bool(forKey: "notchReduceMotion")
+      let separateSpaces =
+        defaults.object(forKey: "notchSeparateSpaces") == nil
+        ? nil : defaults.bool(forKey: "notchSeparateSpaces")
       // `-notchAppearance aqua`, `darkAqua`, `highContrastAqua` or `highContrastDarkAqua` forces
       // the panels' appearance.
       let appearance: NSAppearance.Name? =
@@ -43,8 +46,10 @@ import Overlay
         }
       let overlay =
         OverlayProbe.isRequested
-        ? NotchHost(pointer: { OverlayProbe.pointer }, reduceMotion: reduceMotion, appearance: appearance)
-        : NotchHost(reduceMotion: reduceMotion, appearance: appearance)
+        ? NotchHost(
+          pointer: { OverlayProbe.pointer }, reduceMotion: reduceMotion, appearance: appearance,
+          separateSpaces: separateSpaces)
+        : NotchHost(reduceMotion: reduceMotion, appearance: appearance, separateSpaces: separateSpaces)
     #elseif DEBUG
       let overlay = OverlayProbe.isRequested ? OverlayHost(pointer: { OverlayProbe.pointer }) : OverlayHost()
     #else
