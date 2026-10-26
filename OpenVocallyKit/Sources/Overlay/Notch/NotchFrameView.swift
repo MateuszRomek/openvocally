@@ -3,8 +3,8 @@ import OverlayCore
 import SwiftUI
 
 /// Draws one notch frame. Animation is scoped by structure: the shape animates on the frame's
-/// cue keyed on the footprint, and the content swaps on `Motion.content` keyed on itself, so
-/// a content change never moves the shape.
+/// cue keyed on the footprint, and the content animates on `Motion.content` keyed on the strip
+/// lead, so a content change never moves the shape.
 struct NotchFrameView: View {
   let drawing: NotchDrawing
   let placement: NotchPlacement
@@ -48,7 +48,9 @@ private struct NotchFrameShape: View {
           .transition(contentTransition)
       }
     }
-    .animation(Motion.content.resolved(reduceMotion: reduceMotion), value: key)
+    // Keyed on the lead, not `key`: the bars states share one key, and the mic tint and bars
+    // mode change between them.
+    .animation(Motion.content.resolved(reduceMotion: reduceMotion), value: drawing.scene.strip)
     .frame(width: size.width, height: size.height, alignment: .top)
     .clipShape(shape)
     .background(Color.clear.surface(.notch, in: shape))
