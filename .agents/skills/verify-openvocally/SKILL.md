@@ -1,6 +1,6 @@
 ---
 name: verify-openvocally
-description: Drive the real OpenVocally macOS Debug app and capture proof without a human. Covers dictation (WAV fixture as the microphone, real model, overlay, LB-01 and LB-02), the overlay, Transcripts, onboarding, the Design Gallery and idle CPU. Use it to prove a change works on the running app, before saying a UI or dictation change is done, or when a PR asks for latency numbers or screenshots.
+description: Drive the real OpenVocally macOS Debug app and capture proof without a human. Covers dictation (WAV fixture as the microphone, real model, overlay, LB-01 and LB-02), the overlay, Transcripts, onboarding, the Design Gallery, idle CPU and the fake claude and codex CLIs for Agents. Use it to prove a change works on the running app, before saying a UI or dictation change is done, or when a PR asks for latency numbers or screenshots.
 ---
 
 # Verify OpenVocally

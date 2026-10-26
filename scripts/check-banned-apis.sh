@@ -66,3 +66,9 @@ if grep -rnE 'OSLogStore|^[[:space:]]*import[[:space:]]+OSLog\b' --include='*.sw
   echo "Read logs only through Diagnostics/LogArchive.swift, which redacts each entry as it reads it." >&2
   exit 1
 fi
+
+if grep -nE '\.library\(.*(AgentFakes|FakeAgentCLI)' OpenVocallyKit/Package.swift \
+  || grep -rnE 'AgentFakes|FakeAgentCLI' project.yml App/; then
+  echo "AgentFakes and FakeAgentCLI are test doubles. Remove them from library products in OpenVocallyKit/Package.swift, from project.yml and from App/. The app selects a fake only through a provider's binary path." >&2
+  exit 1
+fi

@@ -195,6 +195,11 @@ fi
 app="$out_dir/OpenVocally.app"
 ditto "$products/OpenVocally.app" "$app"
 
+fakes="$(find "$app" \( -name claude -o -name codex -o -name FakeAgentCLI \) -print)"
+if [[ -n "$fakes" ]]; then
+  fail "The Release bundle contains fake agent CLIs: $fakes. Keep AgentFakes and FakeAgentCLI out of library products, project.yml and App/."
+fi
+
 sign() {
   codesign --force --sign "$identity" --options runtime --timestamp "$@" ||
     fail "codesign failed for ${*: -1}. Check that the Developer ID certificate and its private key are in the login keychain."

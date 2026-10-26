@@ -1,4 +1,4 @@
-.PHONY: whisper generate lint format test build check run onboarding onboarding-shots smoke-idle overlay-demo install dictation-latency capture-latency device-change device-change-bluetooth speech-check-bluetooth transcripts-latency model-bench model-bench-quick dictation-harness gallery-shots diagnostics-export release update-e2e
+.PHONY: whisper generate lint format test build check run onboarding onboarding-shots smoke-idle overlay-demo install dictation-latency capture-latency device-change device-change-bluetooth speech-check-bluetooth transcripts-latency model-bench model-bench-quick dictation-harness gallery-shots agents-shots diagnostics-export release update-e2e
 
 # Patched whisper.cpp. Rebuilds only when its script or patch changes.
 whisper:
@@ -52,6 +52,9 @@ onboarding-shots:
 # Writes a PNG of each Design Gallery section to .build/design-gallery, without taking focus.
 gallery-shots:
 	./scripts/design/gallery-shots.sh
+
+agents-shots:
+	./scripts/agents/agents-shots.sh
 
 # Opens the Debug app and fails when it is busy while idle (a SwiftUI update loop).
 smoke-idle:
