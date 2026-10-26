@@ -13,39 +13,49 @@ package struct NotchCore: Sendable {
 
   package var scene: NotchScene { inputs.scene }
 
-  /// The display under the pointer, where the notch shows.
-  package var activeDisplay: DisplayID? { inputs.pointerDisplay }
+  /// The display under the pointer, whether or not the notch may show there.
+  package var pointerDisplay: DisplayID? { inputs.pointerDisplay }
+
+  /// The display under the pointer when it has a menu bar, where the notch shows.
+  package var activeDisplay: DisplayID? {
+    guard let display = inputs.pointerDisplay, inputs.menuBarDisplays.contains(display) else {
+      return nil
+    }
+    return display
+  }
 
   /// When the next `.tick` is due, or nil when nothing waits on time.
   package var nextDeadline: HostTime? { inputs.connectingDeadline }
 
   /// Applies `event` and returns the frames to show.
   ///
-  /// Send a `.pointer` event before the first dictation event: until a display is known, events
-  /// update the state but show nothing.
+  /// Send a `.displays` and a `.pointer` event before anything can show: until the pointer is on a
+  /// display with a menu bar, events update the state but show nothing.
   package mutating func send(_ event: NotchEvent, at now: HostTime) -> NotchOutcome {
-    let oldDisplay = inputs.pointerDisplay
+    let oldDisplay = activeDisplay
     inputs.apply(event, at: now)
     let scene = inputs.scene
-    guard let display = inputs.pointerDisplay else { return NotchOutcome(frames: [:]) }
+    let display = activeDisplay
 
-    if let oldDisplay, oldDisplay != display {
-      let old = committed
+    if let display, display == oldDisplay {
+      guard scene != committed else { return NotchOutcome(frames: [:]) }
+      let motion = MotionCue.choose(
+        from: committed.footprint, to: scene.footprint, cause: event.cause)
       committed = scene
-      guard old != .hidden || scene != .hidden else { return NotchOutcome(frames: [:]) }
-      return NotchOutcome(frames: [
-        oldDisplay: NotchFrame(
-          scene: .hidden,
-          motion: .choose(from: old.footprint, to: .hidden, cause: event.cause)),
-        display: NotchFrame(
-          scene: scene,
-          motion: .choose(from: .hidden, to: scene.footprint, cause: event.cause)),
-      ])
+      return NotchOutcome(frames: [display: NotchFrame(scene: scene, motion: motion)])
     }
 
-    guard scene != committed else { return NotchOutcome(frames: [:]) }
-    let motion = MotionCue.choose(from: committed.footprint, to: scene.footprint, cause: event.cause)
-    committed = scene
-    return NotchOutcome(frames: [display: NotchFrame(scene: scene, motion: motion)])
+    var frames: [DisplayID: NotchFrame] = [:]
+    if let oldDisplay, committed != .hidden {
+      frames[oldDisplay] = NotchFrame(
+        scene: .hidden,
+        motion: .choose(from: committed.footprint, to: .hidden, cause: event.cause))
+    }
+    if let display, scene != .hidden {
+      frames[display] = NotchFrame(
+        scene: scene, motion: .choose(from: .hidden, to: scene.footprint, cause: event.cause))
+    }
+    committed = display == nil ? .hidden : scene
+    return NotchOutcome(frames: frames)
   }
 }
