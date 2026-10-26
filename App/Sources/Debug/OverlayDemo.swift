@@ -6,56 +6,114 @@
 
   private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay-demo")
 
+  #if FEATURE_NOTCH
+    typealias DemoOverlay = NotchHost
+  #else
+    typealias DemoOverlay = OverlayHost
+  #endif
+
   /// Launch with `-overlayDemo YES` to drive the real overlay through a scripted loop instead of
   /// the hotkeys, `-overlayStyle notch` or `island` to pick its style, and `-overlayPlacement
-  /// islandTop` or `islandBottom` to pick the island's edge.
+  /// islandTop` or `islandBottom` to pick the island's edge. `-overlayDemoScenario paste` or
+  /// `manualPaste` loops one dictation instead of every state, and `pasteThenManualPaste`
+  /// alternates the two.
   /// The pipeline never starts, so nothing is recorded or pasted.
   @MainActor enum OverlayDemo {
+    private enum Scenario: String {
+      case all, paste, manualPaste, pasteThenManualPaste
+    }
+
     static var isRequested: Bool {
       UserDefaults.standard.bool(forKey: "overlayDemo")
     }
 
-    static func run(_ overlay: OverlayHost) async {
+    private static var scenario: Scenario {
+      UserDefaults.standard.string(forKey: "overlayDemoScenario").flatMap(Scenario.init) ?? .all
+    }
+
+    static func run(_ overlay: DemoOverlay) async {
+      let scenario = Self.scenario
       while !Task.isCancelled {
-        await step("starting", .starting(.pushToTalk), for: .milliseconds(400), overlay)
-        overlay.show(OverlayActivity(dictation: .recording(.pushToTalk)), from: .dictation)
-        logger.info("recording with meter")
-        await feedMeter(overlay, for: .milliseconds(2500))
-        await step("transcribing", .transcribing, for: .milliseconds(700), overlay)
-        await step("pasting", .pasting, for: .milliseconds(200), overlay)
-        await step("complete", .complete, for: .milliseconds(650), overlay)
-        await step("hidden", .idle, for: .seconds(1), overlay)
-
-        logger.info("connecting bluetooth mic")
-        overlay.show(
-          OverlayActivity(dictation: .starting(.pushToTalk), wakingMicrophone: true), from: .dictation)
-        try? await Task.sleep(for: .milliseconds(1800))
-        overlay.show(OverlayActivity(dictation: .recording(.pushToTalk)), from: .dictation)
-        await feedMeter(overlay, for: .milliseconds(1500))
-        await step("hidden", .idle, for: .seconds(1), overlay)
-
-        await step("recording", .recording(.toggle), for: .seconds(1), overlay)
-        await step("no speech", .failed(.noSpeech), for: .milliseconds(2900), overlay)
-        await step("hidden", .idle, for: .seconds(1), overlay)
-
-        await step("recording", .recording(.toggle), for: .seconds(1), overlay)
-        await step("transcribing", .transcribing, for: .milliseconds(500), overlay)
-        let until = HostTime.now().advanced(by: DictationMachine.manualPasteWindow)
-        await step("manual paste", .awaitingManualPaste(until: until), for: .seconds(4), overlay)
-        await step("manual paste expired", .failed(.manualPasteExpired), for: .milliseconds(2900), overlay)
-        await step("hidden", .idle, for: .seconds(1), overlay)
+        switch scenario {
+        case .all: await loopAll(overlay)
+        case .paste: await loopPaste(overlay)
+        case .manualPaste: await loopManualPaste(overlay)
+        case .pasteThenManualPaste:
+          await loopPaste(overlay)
+          await loopManualPaste(overlay)
+        }
       }
     }
 
+    private static func loopPaste(_ overlay: DemoOverlay) async {
+      await recordWithMeter(overlay)
+      await step("transcribing", .transcribing, for: .milliseconds(700), overlay)
+      await step("pasting", .pasting, for: .milliseconds(200), overlay)
+      await step("complete", .complete, for: .milliseconds(650), overlay)
+      await step("hidden", .idle, for: .milliseconds(1500), overlay)
+    }
+
+    private static func loopManualPaste(_ overlay: DemoOverlay) async {
+      await recordWithMeter(overlay)
+      await step("transcribing", .transcribing, for: .milliseconds(500), overlay)
+      let window = DictationMachine.manualPasteWindow
+      let until = HostTime.now().advanced(by: window)
+      await step("manual paste", .awaitingManualPaste(until: until), for: window, overlay)
+      await step("hidden", .idle, for: .milliseconds(1500), overlay)
+    }
+
+    private static func recordWithMeter(_ overlay: DemoOverlay) async {
+      await step("starting", .starting(.pushToTalk), for: .milliseconds(150), overlay)
+      show(.recording(.pushToTalk), on: overlay)
+      logger.info("recording with meter")
+      await feedMeter(overlay, for: .milliseconds(2500))
+    }
+
+    private static func loopAll(_ overlay: DemoOverlay) async {
+      await recordWithMeter(overlay)
+      await step("transcribing", .transcribing, for: .milliseconds(700), overlay)
+      await step("pasting", .pasting, for: .milliseconds(200), overlay)
+      await step("complete", .complete, for: .milliseconds(650), overlay)
+      await step("hidden", .idle, for: .seconds(1), overlay)
+
+      logger.info("connecting bluetooth mic")
+      show(.starting(.pushToTalk), wakingMicrophone: true, on: overlay)
+      try? await Task.sleep(for: .milliseconds(1800))
+      show(.recording(.pushToTalk), on: overlay)
+      await feedMeter(overlay, for: .milliseconds(1500))
+      await step("hidden", .idle, for: .seconds(1), overlay)
+
+      await step("recording", .recording(.toggle), for: .seconds(1), overlay)
+      await step("no speech", .failed(.noSpeech), for: .milliseconds(2900), overlay)
+      await step("hidden", .idle, for: .seconds(1), overlay)
+
+      await step("recording", .recording(.toggle), for: .seconds(1), overlay)
+      await step("transcribing", .transcribing, for: .milliseconds(500), overlay)
+      let until = HostTime.now().advanced(by: DictationMachine.manualPasteWindow)
+      await step("manual paste", .awaitingManualPaste(until: until), for: .seconds(4), overlay)
+      await step("manual paste expired", .failed(.manualPasteExpired), for: .milliseconds(2900), overlay)
+      await step("hidden", .idle, for: .seconds(1), overlay)
+    }
+
     private static func step(
-      _ name: String, _ phase: DictationPhase, for duration: Duration, _ overlay: OverlayHost
+      _ name: String, _ phase: DictationPhase, for duration: Duration, _ overlay: DemoOverlay
     ) async {
       logger.info("\(name, privacy: .public)")
-      overlay.show(OverlayActivity(dictation: phase), from: .dictation)
+      show(phase, on: overlay)
       try? await Task.sleep(for: duration)
     }
 
-    private static func feedMeter(_ overlay: OverlayHost, for duration: Duration) async {
+    /// A waking microphone needs no call of its own on the notch: its core shows Connecting
+    /// once the start outlasts the delay.
+    static func show(_ phase: DictationPhase, wakingMicrophone: Bool = false, on overlay: DemoOverlay) {
+      #if FEATURE_NOTCH
+        overlay.show(phase)
+      #else
+        overlay.show(OverlayActivity(dictation: phase, wakingMicrophone: wakingMicrophone), from: .dictation)
+      #endif
+    }
+
+    private static func feedMeter(_ overlay: DemoOverlay, for duration: Duration) async {
       let start = ContinuousClock.now
       while ContinuousClock.now - start < duration, !Task.isCancelled {
         let t = (ContinuousClock.now - start) / .seconds(1)

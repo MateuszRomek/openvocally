@@ -30,6 +30,6 @@ Preconditions:
 ## Gotchas
 
 - `run-debug.sh` returns once the app is open, and the lock goes with it. Keep the live loop inside `scripts/with-debug-app.sh` and quit the app with the cleanup script before the next check.
-- On a Mac without a notch, the notch style falls back to the top island.
+- In Release builds, a Mac without a notch shows the notch style as the top island. Debug builds with `FEATURE_NOTCH` draw the dictation notch instead; see `notch.md`.
 - The full-screen check takes over the main display for about 25 s. Warn the user before running it.
 - The overlay panels stay ordered in and hide at alpha 0. A panel ordered out while a full-screen Space closes loses every other full-screen Space until the app quits. On a full-screen Space, a check line with `unoccluded false` and `on active Space false` means a panel was ordered out somewhere.

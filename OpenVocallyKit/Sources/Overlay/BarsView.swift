@@ -3,15 +3,18 @@ import SwiftUI
 
 struct BarsView: View {
   let mode: BarsMode
+  /// The token the live bars follow the meter on.
+  var meter = Motion.overlayMeter
   @Environment(BarsModel.self) private var bars
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+  @Environment(\.reduceMotionOverride) private var reduceMotionOverride
 
   var body: some View {
-    if reduceMotion {
+    if reduceMotionOverride ?? systemReduceMotion {
       BarsShape(heights: Bars.heights(mode, bands: [], time: 0, reduceMotion: true))
     } else if mode == .live {
       let heights = Bars.heights(.live, bands: bars.bands, time: 0, reduceMotion: false)
-      BarsShape(heights: heights).motion(.overlayMeter, value: heights)
+      BarsShape(heights: heights).animation(meter.animation, value: heights)
     } else {
       TimelineView(.animation) { context in
         BarsShape(

@@ -54,7 +54,22 @@ extension OverlayActivity {
 
   /// The overlay line for each failure reason. nil for a cancel, which shows nothing.
   static func message(for reason: DictationFailureReason) -> StaticString? {
-    switch reason {
+    reason.overlayMessage
+  }
+}
+
+extension OverlayActivity {
+  /// A deadline already past ends now.
+  static func wallClock(_ until: HostTime, now: Date, hostNow: HostTime) -> Date {
+    now.addingTimeInterval(until > hostNow ? until.seconds(since: hostNow) : 0)
+  }
+}
+
+extension DictationFailureReason {
+  /// The overlay line for this failure, shared by the pill and the notch. nil for a cancel,
+  /// which shows nothing.
+  var overlayMessage: StaticString? {
+    switch self {
     case .aborted: nil
     case .microphonePermissionDenied: "Microphone access needed"
     case .captureError(.noInputDevice): "No microphone found"
@@ -71,12 +86,5 @@ extension OverlayActivity {
     case .nothingToPaste: "Nothing to paste yet"
     case .manualPasteExpired: "Saved to Transcripts"
     }
-  }
-}
-
-extension OverlayActivity {
-  /// A deadline already past ends now.
-  static func wallClock(_ until: HostTime, now: Date, hostNow: HostTime) -> Date {
-    now.addingTimeInterval(until > hostNow ? until.seconds(since: hostNow) : 0)
   }
 }

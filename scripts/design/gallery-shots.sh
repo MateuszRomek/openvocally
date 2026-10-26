@@ -10,7 +10,9 @@ the background on the Design Gallery once per section and captures only the gall
 to .build/design-gallery/<section>.png. Each shot shows the Light, Dark and both Increase
 Contrast columns. Posts no clicks or keys and never takes focus. Captures the window itself,
 so other windows on top don't matter. Sections default to type spacing radius color
-surface overlay components sidebar panels motion. Needs Screen Recording for the terminal.
+surface overlay notch notch-reduce-motion components sidebar panels motion language. The notch
+sections open the window over the main display's visible area and shrink to fit it. Needs
+Screen Recording for the terminal.
 HELP
   exit 0
 fi
@@ -21,13 +23,20 @@ if [[ "${DEBUG_APP_LOCK_HELD:-}" != 1 ]]; then
 fi
 
 sections=("$@")
-((${#sections[@]})) || sections=(type spacing radius color surface overlay components sidebar panels motion language)
+((${#sections[@]})) || sections=(type spacing radius color surface overlay notch notch-reduce-motion components sidebar panels motion language)
 out="$PWD/.build/design-gallery"
 mkdir -p "$out"
 app="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally Dev.app"
 executable="$app/Contents/MacOS/OpenVocally"
 window_id="$PWD/.build/window-id"
 swiftc -O scripts/lib/window-id.swift -o "$window_id"
+screens="$PWD/.build/screens"
+swiftc -O scripts/lib/screens.swift -o "$screens"
+# The notch sections shrink to fit the window, so they open it over the main display's
+# visible area to stay legible. The argument domain is read before the saved frame.
+read -r _ _ _ _ _ vx vy vw vh _ < <("$screens" | head -n 1)
+
+frame_args=()
 
 running() {
   ps -axo pid=,comm= | awk -v exe="$executable" '{ pid = $1; sub(/^[ \t]*[0-9]+[ \t]+/, ""); if ($0 == exe) print pid }'
@@ -47,16 +56,20 @@ quit_app() {
 # -ApplePersistenceIgnoreState: windows saved by a hand-run session would open instead of the gallery.
 open_section() {
   for _ in $(seq 1 10); do
-    open -g "$app" --args -designGallery YES -designGallerySection "$1" -ApplePersistenceIgnoreState YES 2>/dev/null && return 0
+    open -g "$app" --args -designGallery YES -designGallerySection "$1" -ApplePersistenceIgnoreState YES \
+      ${frame_args[@]+"${frame_args[@]}"} 2>/dev/null && return 0
     sleep 0.5
   done
-  open -g "$app" --args -designGallery YES -designGallerySection "$1" -ApplePersistenceIgnoreState YES
+  open -g "$app" --args -designGallery YES -designGallerySection "$1" -ApplePersistenceIgnoreState YES \
+    ${frame_args[@]+"${frame_args[@]}"}
 }
 
 for section in "${sections[@]}"; do
+  frame_args=()
+  [[ "$section" == notch* ]] && frame_args=(-"NSWindow Frame design-gallery" "$vx $vy $vw $vh")
   if [[ "$section" == "${sections[0]}" ]]; then
     RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh -designGallery YES -designGallerySection "$section" \
-      -ApplePersistenceIgnoreState YES
+      -ApplePersistenceIgnoreState YES ${frame_args[@]+"${frame_args[@]}"}
   else
     quit_app
     open_section "$section"

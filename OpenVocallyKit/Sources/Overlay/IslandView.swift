@@ -117,6 +117,7 @@ private struct GlyphView: View {
 struct TrailingSlot: View {
   let trailing: OverlayActivity.Trailing
   let status: StatusWord
+  var meter = Motion.overlayMeter
 
   var body: some View {
     let key = Key(trailing: trailing, status: status)
@@ -128,7 +129,7 @@ struct TrailingSlot: View {
   @ViewBuilder private var content: some View {
     switch trailing {
     case .bars(let mode):
-      BarsView(mode: mode)
+      BarsView(mode: mode, meter: meter)
         .foregroundStyle(mode == .live ? Color.primary : Color.secondary)
     case .status:
       Text(status.text)

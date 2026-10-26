@@ -21,35 +21,69 @@
       return GallerySection.allCases.filter { only == nil || $0.rawValue == only }
     }()
 
+    @State private var natural = CGSize.zero
+
     var body: some View {
-      ScrollView([.horizontal, .vertical]) {
-        VStack(alignment: .leading, spacing: Space.xxl.points) {
-          SystemSettingsNote()
-          let columns = sections.filter { $0 != .motion && $0 != .overlay }
-          if !columns.isEmpty {
-            HStack(alignment: .top, spacing: 0) {
-              ForEach(Self.appearances, id: \.title) { appearance in
-                AppearanceHost(appearance: appearance.name) {
-                  TokenColumn(title: appearance.title, sections: columns)
-                }
+      GeometryReader { viewport in
+        ScrollView([.horizontal, .vertical]) {
+          if sections.allSatisfy({ $0 == .notch || $0 == .notchReduceMotion }) {
+            let scale =
+              natural.width > 0
+              ? min(1, viewport.size.width / natural.width, viewport.size.height / natural.height) : 1
+            content
+              .fixedSize()
+              .onGeometryChange(for: CGSize.self) {
+                $0.size
+              } action: {
+                natural = $0
               }
-            }
-          }
-          if sections.contains(.overlay) {
-            HStack(alignment: .top, spacing: 0) {
-              ForEach(Self.appearances, id: \.title) { appearance in
-                AppearanceHost(appearance: appearance.name) {
-                  OverlayColumn(title: appearance.title)
-                }
-              }
-            }
-          }
-          if sections.contains(.motion) {
-            MotionSection()
+              .scaleEffect(scale, anchor: .topLeading)
+              .frame(width: natural.width * scale, height: natural.height * scale, alignment: .topLeading)
+          } else {
+            content
           }
         }
-        .padding(Space.xl)
       }
+    }
+
+    private var content: some View {
+      VStack(alignment: .leading, spacing: Space.xxl.points) {
+        SystemSettingsNote()
+        let columns = sections.filter { ![.motion, .overlay, .notch, .notchReduceMotion].contains($0) }
+        if !columns.isEmpty {
+          HStack(alignment: .top, spacing: 0) {
+            ForEach(Self.appearances, id: \.title) { appearance in
+              AppearanceHost(appearance: appearance.name) {
+                TokenColumn(title: appearance.title, sections: columns)
+              }
+            }
+          }
+        }
+        if sections.contains(.overlay) {
+          HStack(alignment: .top, spacing: 0) {
+            ForEach(Self.appearances, id: \.title) { appearance in
+              AppearanceHost(appearance: appearance.name) {
+                OverlayColumn(title: appearance.title)
+              }
+            }
+          }
+        }
+        ForEach([false, true], id: \.self) { reduceMotion in
+          if sections.contains(reduceMotion ? .notchReduceMotion : .notch) {
+            HStack(alignment: .top, spacing: 0) {
+              ForEach(Self.appearances, id: \.title) { appearance in
+                AppearanceHost(appearance: appearance.name) {
+                  NotchColumn(title: appearance.title, reduceMotion: reduceMotion)
+                }
+              }
+            }
+          }
+        }
+        if sections.contains(.motion) {
+          MotionSection()
+        }
+      }
+      .padding(Space.xl)
     }
   }
 
@@ -60,6 +94,8 @@
     case color
     case surface
     case overlay
+    case notch
+    case notchReduceMotion = "notch-reduce-motion"
     case components
     case sidebar
     case panels
@@ -134,7 +170,7 @@
           case .components: ComponentsSection()
           case .sidebar: SidebarSection()
           case .panels: PanelsSection()
-          case .motion, .overlay: EmptyView()
+          case .motion, .overlay, .notch, .notchReduceMotion: EmptyView()
           case .language: LanguageSection()
           }
         }
@@ -569,6 +605,11 @@
       case .overlayHide: "Overlay leaves, faster than it came."
       case .overlayContentSwap: "Overlay content changes between phases."
       case .overlayMeter: "Overlay meter bars follow the microphone. Frozen under Reduce Motion."
+      case .grow: "The notch appears, or grows for a result."
+      case .shrink: "The notch shrinks or leaves. No overshoot."
+      case .keyboard: "The notch answers a key press. Instant under Reduce Motion."
+      case .content: "Notch content changes within one size."
+      case .meter: "Notch meter bars follow the microphone. Frozen under Reduce Motion."
       case .windowReveal: "A banner or row appears in a window."
       case .windowUnfold: "A row or section opens in place."
       case .press: "A pressed control shrinks a little. Dims under Reduce Motion."
@@ -598,7 +639,7 @@
       Float(max(0.05, 0.9 - abs(Double(band) - 9.5) / 11))
     }
 
-    private static let phases: [(String, DictationPhase)] = [
+    static let phases: [(String, DictationPhase)] = [
       ("starting", .starting(.pushToTalk)),
       ("recording", .recording(.toggle)),
       ("stopping", .stopping),
@@ -694,6 +735,55 @@
       }
       .padding(Space.xl)
       .frame(width: 500, alignment: .topLeading)
+      .background(.token(.windowBackground))
+    }
+  }
+
+  /// Every dictation scene through the dictation notch's view at the simulated notch's size, in
+  /// two columns so all of them fit the gallery window. The Reduce Motion variant is its own
+  /// section, because both side by side are wider than any display.
+  private struct NotchColumn: View {
+    let title: String
+    let reduceMotion: Bool
+
+    private struct Sample: Identifiable {
+      let id: String
+      let phases: [DictationPhase]
+      var waitingForMicrophone = false
+    }
+
+    private static let bands: [Float] = (0..<20).map { band in
+      Float(max(0.05, 0.9 - abs(Double(band) - 9.5) / 11))
+    }
+
+    private static let samples: [Sample] =
+      [Sample(id: "connecting", phases: [.starting(.pushToTalk)], waitingForMicrophone: true)]
+      + OverlayColumn.phases.map { name, phase in
+        Sample(id: name, phases: [.recording(.toggle), phase])
+      }
+
+    var body: some View {
+      let half = (Self.samples.count + 1) / 2
+      VStack(alignment: .leading, spacing: Space.m.points) {
+        Text(title).textStyle(.title3).fontWeight(.semibold)
+        SectionTitle(text: reduceMotion ? "Notch, Reduce Motion" : "Notch")
+        HStack(alignment: .top, spacing: Space.m.points) {
+          ForEach([Self.samples.prefix(half), Self.samples.dropFirst(half)], id: \.startIndex) { samples in
+            VStack(alignment: .leading, spacing: Space.s.points) {
+              ForEach(samples) { sample in
+                VStack(alignment: .leading, spacing: Space.xxs.points) {
+                  Text(sample.id).textStyle(.caption).foregroundStyle(.secondary)
+                  NotchFramePreview(
+                    phases: sample.phases, waitingForMicrophone: sample.waitingForMicrophone,
+                    bands: Self.bands, reduceMotion: reduceMotion)
+                }
+              }
+            }
+          }
+        }
+      }
+      .padding(Space.l)
+      .fixedSize()
       .background(.token(.windowBackground))
     }
   }

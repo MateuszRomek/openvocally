@@ -196,7 +196,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
 
   /// The centre of the frontmost app's front window, in global screen points. Skips the
   /// transparent strip a full-screen window keeps above itself.
-  private static func focusedWindowCentre() -> CGPoint? {
+  static func focusedWindowCentre() -> CGPoint? {
     guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
       let windows = CGWindowListCopyWindowInfo(
         [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
@@ -322,17 +322,6 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   }
 }
 
-/// Never key and never main, so the overlay cannot take focus from the paste target.
-private final class NonActivatingPanel: NSPanel {
-  override var canBecomeKey: Bool { false }
-  override var canBecomeMain: Bool { false }
-
-  /// The notch canvas covers the menu bar, where AppKit would otherwise push a window down.
-  override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
-    frameRect
-  }
-}
-
 @MainActor private final class ScreenPanel {
   let panel: NSPanel
   let hosting: NSHostingView<OverlayRoot>
@@ -340,23 +329,7 @@ private final class NonActivatingPanel: NSPanel {
 
   /// Click-through, never takes focus, above full-screen apps, on every Space.
   init(bars: BarsModel) {
-    let panel = NonActivatingPanel(
-      contentRect: NSRect(origin: .zero, size: OverlayMetrics.canvas),
-      styleMask: [.borderless, .nonactivatingPanel],
-      backing: .buffered,
-      defer: true
-    )
-    panel.level = .statusBar
-    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-    panel.isOpaque = false
-    panel.backgroundColor = .clear
-    panel.hasShadow = false
-    panel.ignoresMouseEvents = true
-    panel.hidesOnDeactivate = false
-    // Hiding the app would order the panel out, which strands it like `hide()` avoids.
-    panel.canHide = false
-    panel.isReleasedWhenClosed = false
-    panel.animationBehavior = .none
+    let panel = NonActivatingPanel.overlay(size: OverlayMetrics.canvas)
     let hosting = NSHostingView(rootView: OverlayRoot(model: model, bars: bars))
     hosting.sizingOptions = []
     panel.contentView = hosting

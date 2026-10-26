@@ -315,6 +315,22 @@ private struct AppearanceRows: View {
     }
     .pickerStyle(.segmented)
     .onChange(of: theme) { _, theme in theme.apply() }
+    #if !FEATURE_NOTCH
+      overlayRows
+    #endif
+    // The translucent window relies on the macOS 26 toolbar's scroll edge effect.
+    if #available(macOS 26, *) {
+      SettingRow("Translucent window", subtitle: "Shows the desktop through the window, blurred.") {
+        Toggle("Translucent window", isOn: translucent).labelsHidden().switchStyle()
+      }
+    }
+    SettingRow("Show in menu bar", subtitle: "The Dock menu offers the same actions when it is hidden.") {
+      Toggle("Show in menu bar", isOn: $menuBarShown).labelsHidden().switchStyle()
+    }
+  }
+
+  /// The pre-notch overlay's style and island position.
+  @ViewBuilder private var overlayRows: some View {
     SettingRow(
       "Overlay",
       subtitle: overlayStyle == .notch ? "Displays without a notch show the island at the top." : nil
@@ -332,15 +348,6 @@ private struct AppearanceRows: View {
         Text("Bottom").tag(IslandEdge.bottom)
       }
       .pickerStyle(.segmented)
-    }
-    // The translucent window relies on the macOS 26 toolbar's scroll edge effect.
-    if #available(macOS 26, *) {
-      SettingRow("Translucent window", subtitle: "Shows the desktop through the window, blurred.") {
-        Toggle("Translucent window", isOn: translucent).labelsHidden().switchStyle()
-      }
-    }
-    SettingRow("Show in menu bar", subtitle: "The Dock menu offers the same actions when it is hidden.") {
-      Toggle("Show in menu bar", isOn: $menuBarShown).labelsHidden().switchStyle()
     }
   }
 

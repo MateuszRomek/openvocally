@@ -48,7 +48,11 @@ enum OnboardingStep: Int, CaseIterable {
   /// The overlay step only offers notch or island, which matters only with a notch; without one
   /// Settings covers it. `forced` (a Debug `-onboardingStep`) is kept so any step can be opened.
   static func steps(hasNotch: Bool, including forced: OnboardingStep = .welcome) -> [OnboardingStep] {
-    allCases.filter { $0 != .overlay || hasNotch || $0 == forced }
+    #if FEATURE_NOTCH
+      allCases.filter { $0 != .overlay || $0 == forced }
+    #else
+      allCases.filter { $0 != .overlay || hasNotch || $0 == forced }
+    #endif
   }
 
   func next(in steps: [OnboardingStep]) -> OnboardingStep? {

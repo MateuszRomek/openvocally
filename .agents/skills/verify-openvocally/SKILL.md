@@ -33,6 +33,7 @@ Each script builds the app, launches it in the background with the arguments its
 | Dictation end to end | `make dictation-harness` or `scripts/latency/dictation-harness.sh --runs 3` | `results.jsonl` ends with a `"summary":true` line |
 | Screens of one feature | `make gallery-shots`, `make onboarding-shots`, `scripts/latency/transcripts-latency.sh --screenshots` | the script prints each PNG path |
 | Idle health | `make smoke-idle` | the script prints the settle time and the CPU percentage |
+| Notch on every display | `.agents/skills/verify-openvocally/notch-shots.sh` | the script prints each contact sheet path |
 | Overlay over full-screen apps | `.agents/skills/verify-openvocally/overlay-fullscreen.sh` | the script prints `PASS`, `FAIL` or `NOT REPRODUCED` |
 | Diagnostics export | `make diagnostics-export` | the script prints `PASS`, the log scope line and the build time |
 | A manual look | `RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh <app arguments>` | `scripts/show-logs.sh app 2m` shows the launch |
@@ -46,8 +47,9 @@ The app has no automation API. It is driven by launch arguments, read in the Deb
 - `-dictationHarness <scenario.json> -harnessOutput <path> -dataFolder <dir>` runs the dictation pipeline on WAV fixtures. `scripts/latency/dictation-harness.sh` writes the scenario.
 - `-designGallery YES -designGallerySection <section>` opens the Design Gallery on one section.
 - `-onboarding YES -onboardingStep <step>` opens onboarding on one step. `-modelFolder <dir>` swaps in an empty model folder.
-- `-overlayDemo YES -overlayStyle notch|island -overlayPlacement islandTop|islandBottom` loops the overlay through every state.
+- `-overlayDemo YES -overlayStyle notch|island -overlayPlacement islandTop|islandBottom` loops the overlay through every state. Add `-overlayDemoScenario paste` to loop only a pasted dictation (starting, recording with the meter, transcribing, pasting, complete, hidden), `manualPaste` to loop only a manual paste whose countdown runs out on screen, or `pasteThenManualPaste` to alternate the two.
 - `-overlayProbe <file>` drives the overlay from a file a script rewrites, `<x> <y> <shown>`: the pointer in global screen points and 1 or 0. The overlay follows that pointer instead of the real cursor, so a script can aim at another display without moving the user's cursor. The log category is overlay-demo, and it logs `probe ready` once it reads the file.
+- `-notchProbe <file>` (Debug builds with `FEATURE_NOTCH`) shows one notch scene at a time from `<x> <y> <scene>` and logs `notch probe shown <scene> display <id> window <n>`. `-notchAppearance aqua|darkAqua|highContrastAqua|highContrastDarkAqua` forces the notch's appearance and `-notchReduceMotion YES` its Reduce Motion variant.
 - `-diagnosticsExport <path>` writes the diagnostics file and quits. `-diagnosticsSecret <text>` first logs the text with default privacy, so the script can check the file leaves it out. `-diagnosticsSettings YES` shows Settings scrolled to the Support section without activating the app.
 - `-transcriptsHarness YES -seedTranscripts <rows> -harnessOutput <path>` seeds and times Transcripts. `scripts/latency/transcripts-latency.sh` builds it optimized and passes the rest.
 
@@ -65,6 +67,7 @@ Every script writes its proof under `.build`, and the proof outlives cleanup:
 | `transcripts-latency.sh` | `.build/transcripts-latency/` |
 | `diagnostics-export.sh` | `.build/diagnostics-export/diagnostics.txt` |
 | `smoke-idle.sh` | its output only, so copy the last lines into your report |
+| `notch-shots.sh` | `.build/notch-shots/<display>-<variant>.png` contact sheets and `<display>-<variant>/<scene>.png` |
 | `overlay-fullscreen.sh` | `.build/overlay-fullscreen/log.txt` (the overlay log for the last press) and `shot.png` |
 
 Read the app's own log with `scripts/show-logs.sh <category> [duration]`. Categories are app, capture, dictation-harness, hotkeys, latency, models, overlay, overlay-demo, paste, pipeline, screens, sound, storage, transcription, transcripts and transcripts-harness. In zsh, a bare `log` is a builtin, so always use the script.
