@@ -15,11 +15,12 @@
   /// Launch with `-overlayDemo YES` to drive the real overlay through a scripted loop instead of
   /// the hotkeys, `-overlayStyle notch` or `island` to pick its style, and `-overlayPlacement
   /// islandTop` or `islandBottom` to pick the island's edge. `-overlayDemoScenario paste` or
-  /// `manualPaste` loops one dictation instead of every state.
+  /// `manualPaste` loops one dictation instead of every state, and `pasteThenManualPaste`
+  /// alternates the two.
   /// The pipeline never starts, so nothing is recorded or pasted.
   @MainActor enum OverlayDemo {
     private enum Scenario: String {
-      case all, paste, manualPaste
+      case all, paste, manualPaste, pasteThenManualPaste
     }
 
     static var isRequested: Bool {
@@ -37,6 +38,9 @@
         case .all: await loopAll(overlay)
         case .paste: await loopPaste(overlay)
         case .manualPaste: await loopManualPaste(overlay)
+        case .pasteThenManualPaste:
+          await loopPaste(overlay)
+          await loopManualPaste(overlay)
         }
       }
     }

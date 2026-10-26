@@ -317,6 +317,13 @@ private struct NotchRoot: View {
   var body: some View {
     NotchFrameView(drawing: model.drawing, placement: model.placement)
       .frame(width: OverlayMetrics.canvas.width, height: OverlayMetrics.canvas.height, alignment: .top)
+      // A panel that draws no pixels reports itself occluded when the notch appears, and the
+      // entry spring then never shows: the notch pops in at full size.
+      .background(alignment: .bottomLeading) {
+        Color.black  // allowed: invisible pixel
+          .opacity(OverlayMetrics.occlusionAnchorOpacity)
+          .frame(width: 1, height: 1)
+      }
       .environment(bars)
       .environment(\.reduceMotionOverride, reduceMotion)
   }

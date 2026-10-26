@@ -23,11 +23,17 @@ struct NotchFrameView: View {
         NotchFrameShape(drawing: drawing, placement: placement, reduceMotion: false)
       }
     }
-    .animation(drawing.motion.motion.resolved(reduceMotion: reduceMotion), value: footprint)
+    .animation(shapeAnimation(reduceMotion: reduceMotion), value: footprint)
     .environment(\.colorScheme, .dark)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(drawing.activity?.accessibilityLabel ?? "")
     .accessibilityHidden(drawing.activity == nil)
+  }
+
+  /// A press's feedback never fades in, so under Reduce Motion an entry is instant.
+  private func shapeAnimation(reduceMotion: Bool) -> Animation? {
+    if reduceMotion && drawing.motion == .appear { return nil }
+    return drawing.motion.motion.resolved(reduceMotion: reduceMotion)
   }
 }
 
@@ -56,9 +62,10 @@ private struct NotchFrameShape: View {
     .background(Color.clear.surface(.notch, in: shape))
   }
 
-  /// Content that arrives with a key press is at full opacity in the first frame (LB-01).
+  /// Content that arrives with a key press or with the notch's entry is at full opacity in the
+  /// first frame (LB-01).
   private var contentTransition: AnyTransition {
-    if drawing.motion == .keyboard { return .identity }
+    if drawing.motion == .keyboard || drawing.motion == .appear { return .identity }
     return reduceMotion ? .opacity : AnyTransition(.blurReplace)
   }
 }

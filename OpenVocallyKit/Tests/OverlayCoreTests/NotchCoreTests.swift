@@ -46,7 +46,7 @@ private let failureRows: [Row] = failureReasons.map { reason in
       (.dictation(.idle), .seconds(2)),
     ],
     expected: [
-      strip(.keyboard, .voice(.recording)), notice(.grow, .failure(reason)), hidden(.shrink),
+      strip(.appear, .voice(.recording)), notice(.grow, .failure(reason)), hidden(.shrink),
     ])
 }
 
@@ -61,7 +61,7 @@ private let rows: [Row] =
         (.dictation(.idle), .seconds(1)),
       ],
       expected: [
-        strip(.keyboard, .voice(.starting)), strip(.content, .voice(.recording)),
+        strip(.appear, .voice(.starting)), strip(.content, .voice(.recording)),
         strip(.content, .voice(.transcribing)), strip(.content, .voice(.pasting)),
         strip(.content, .flash(.pasted)), hidden(.shrink),
       ]),
@@ -69,21 +69,21 @@ private let rows: [Row] =
       name: "slow mic",
       events: [(onOne, .zero), (press, .zero), (recording, .milliseconds(450))],
       expected: [
-        strip(.keyboard, .voice(.starting)), strip(.content, .voice(.connecting)),
+        strip(.appear, .voice(.starting)), strip(.content, .voice(.connecting)),
         strip(.content, .voice(.recording)),
       ]),
     Row(
       name: "fast mic",
       events: [(onOne, .zero), (press, .zero), (recording, .milliseconds(120))],
-      expected: [strip(.keyboard, .voice(.starting)), strip(.content, .voice(.recording))]),
+      expected: [strip(.appear, .voice(.starting)), strip(.content, .voice(.recording))]),
     Row(
       name: "a repeated start keeps the original deadline",
       events: [(onOne, .zero), (press, .zero), (press, .milliseconds(200)), (.tick, .milliseconds(100))],
-      expected: [strip(.keyboard, .voice(.starting)), strip(.content, .voice(.connecting))]),
+      expected: [strip(.appear, .voice(.starting)), strip(.content, .voice(.connecting))]),
     Row(
       name: "cancel",
       events: [(onOne, .zero), (recording, .zero), (.dictation(.failed(.aborted)), .seconds(1))],
-      expected: [strip(.keyboard, .voice(.recording)), hidden(.keyboard)]),
+      expected: [strip(.appear, .voice(.recording)), hidden(.keyboard)]),
     Row(
       name: "manual paste",
       events: [
@@ -92,7 +92,7 @@ private let rows: [Row] =
         (.dictation(.complete), .seconds(1)), (.dictation(.idle), .seconds(1)),
       ],
       expected: [
-        strip(.grow, .voice(.transcribing)), notice(.grow, .manualPaste(until: manualPasteEnd)),
+        strip(.appear, .voice(.transcribing)), notice(.grow, .manualPaste(until: manualPasteEnd)),
         strip(.shrink, .flash(.pasted)), hidden(.shrink),
       ]),
     Row(
@@ -100,13 +100,13 @@ private let rows: [Row] =
       events: [
         (onOne, .zero), (.dictation(.failed(.noSpeech)), .zero), (press, .seconds(1)),
       ],
-      expected: [notice(.grow, .failure(.noSpeech)), strip(.keyboard, .voice(.starting))]),
+      expected: [notice(.appear, .failure(.noSpeech)), strip(.keyboard, .voice(.starting))]),
     Row(
       name: "display hand-off",
       events: [(onOne, .zero), (recording, .zero), (.pointer(movedOnto: two), .seconds(1))],
       expected: [
-        strip(.keyboard, .voice(.recording)), hidden(.shrink, on: 1),
-        strip(.grow, .voice(.recording), on: 2),
+        strip(.appear, .voice(.recording)), hidden(.shrink, on: 1),
+        strip(.appear, .voice(.recording), on: 2),
       ]),
     Row(
       name: "pointer moves while hidden",
@@ -115,7 +115,7 @@ private let rows: [Row] =
     Row(
       name: "ticks with nothing due change nothing",
       events: [(onOne, .zero), (recording, .zero), (.tick, .seconds(1)), (.tick, .zero)],
-      expected: [strip(.keyboard, .voice(.recording))]),
+      expected: [strip(.appear, .voice(.recording))]),
   ] + failureRows
 
 struct NotchCoreTests {

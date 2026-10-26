@@ -9,6 +9,7 @@ extension MotionCue {
     case .shrink: .shrink
     case .keyboard: .keyboard
     case .content: .content
+    case .appear: .grow
     }
   }
 }

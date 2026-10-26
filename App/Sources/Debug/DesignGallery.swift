@@ -605,7 +605,7 @@
       case .overlayHide: "Overlay leaves, faster than it came."
       case .overlayContentSwap: "Overlay content changes between phases."
       case .overlayMeter: "Overlay meter bars follow the microphone. Frozen under Reduce Motion."
-      case .grow: "The notch grows for a result or another display."
+      case .grow: "The notch appears, or grows for a result."
       case .shrink: "The notch shrinks or leaves. No overshoot."
       case .keyboard: "The notch answers a key press. Instant under Reduce Motion."
       case .content: "Notch content changes within one size."

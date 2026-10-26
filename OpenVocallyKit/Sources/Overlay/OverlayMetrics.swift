@@ -53,6 +53,8 @@ public enum OverlayMetrics {
   /// with their insets, fixed so one notice replacing another never resizes the shape.
   static let notchNoticeDrop: CGFloat = 48
   /// A 14 and 16 inch MacBook Pro notch, for previews on a Mac without one.
+  /// The opacity of the one-pixel backing that keeps an idle notch panel unoccluded. Too faint to see.
+  static let occlusionAnchorOpacity = 0.01
   public static let notchSimulated = CGSize(width: 185, height: 32)
 }
 
