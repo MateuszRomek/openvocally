@@ -7,6 +7,10 @@ let strict: [SwiftSetting] = [
   .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
 ]
 
+/// Agents is unfinished. Its code compiles only in Debug, so Release carries none of it. Remove
+/// this, and the `#if FEATURE_AGENTS` around each Agents file, when Agents ships.
+let featureAgents: [SwiftSetting] = [.define("FEATURE_AGENTS", .when(configuration: .debug))]
+
 let package = Package(
   name: "OpenVocallyKit",
   platforms: [.macOS(.v15)],
@@ -24,6 +28,8 @@ let package = Package(
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Reporting", targets: ["Reporting"]),
     .library(name: "Diagnostics", targets: ["Diagnostics"]),
+    .library(name: "AgentsCore", targets: ["AgentsCore"]),
+    .library(name: "Agents", targets: ["Agents"]),
   ],
   dependencies: [
     // NemoTextProcessing normalizes text for FluidAudio's TTS, which the app does not use.
@@ -72,8 +78,10 @@ let package = Package(
     .testTarget(name: "SoundCuesTests", dependencies: ["SoundCues", "DictationCore"], swiftSettings: strict),
     .target(
       name: "Storage",
-      dependencies: [.product(name: "GRDB", package: "GRDB.swift"), "DictationCore", "Hotkeys", "Reporting"],
-      swiftSettings: strict
+      dependencies: [
+        .product(name: "GRDB", package: "GRDB.swift"), "AgentsCore", "DictationCore", "Hotkeys", "Reporting",
+      ],
+      swiftSettings: strict + featureAgents
     ),
     .testTarget(
       name: "StorageTests",
@@ -82,6 +90,11 @@ let package = Package(
       ],
       resources: [.copy("Snapshots")],
       swiftSettings: strict),
+    .target(name: "AgentsCore", swiftSettings: strict + featureAgents),
+    .testTarget(name: "AgentsCoreTests", dependencies: ["AgentsCore"], swiftSettings: strict),
+    .target(name: "Agents", dependencies: ["AgentsCore", "Storage"], swiftSettings: strict + featureAgents),
+    .testTarget(
+      name: "AgentsTests", dependencies: ["Agents", "AgentsCore", "Storage"], swiftSettings: strict),
     .target(name: "Reporting", swiftSettings: strict),
     .testTarget(name: "ReportingTests", dependencies: ["Reporting"], swiftSettings: strict),
     .target(name: "Diagnostics", swiftSettings: strict),

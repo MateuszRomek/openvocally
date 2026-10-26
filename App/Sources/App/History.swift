@@ -40,6 +40,12 @@ enum AppData {
     if case .ready(let database) = state { database } else { nil }
   }
 
+  #if FEATURE_AGENTS
+    var isFailed: Bool {
+      if case .failed = state { true } else { false }
+    }
+  #endif
+
   /// The database the pipeline saves to, read off the main actor. Set again by Try Again.
   @ObservationIgnored private let target = SaveTarget()
   @ObservationIgnored private var retention: Task<Void, Never>?

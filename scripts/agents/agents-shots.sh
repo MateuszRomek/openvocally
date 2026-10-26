@@ -9,9 +9,11 @@ Builds the fake claude and codex CLIs (the FakeAgentCLI target in OpenVocallyKit
 them to .build/agent-fakes/<scenario>/<claude|codex>. Runs --version on every installed fake and
 fails if one fails. Writes one "<scenario> <provider> <path>" line per fake to
 .build/agents/fakes.txt. Then, holding the Debug app lock, opens the Debug app in the background
-once per row of the SHOTS table and captures that window to .build/agents/<shot>.png. Shots
-default to every row. The table is empty until the Agents UI exists, so the script stops after
-the fakes check. Posts no clicks or keys. Needs Screen Recording for the terminal when it takes shots.
+once per row of the SHOTS table, each with a fresh scratch -dataFolder, waits for the app's
+agents-ready file and captures the Agents window to .build/agents/<shot>.png. Shots default to
+every row. Increase Contrast shots are taken only while that system setting is on. Fails when the real Debug database (openvocally.sqlite, -wal, -shm) changed its
+modification time or size during the run. Posts no clicks or keys. Needs Screen Recording for
+the terminal.
 HELP
   exit 0
 fi
@@ -39,14 +41,24 @@ done < <("$fake_cli" --list)
 echo "$out/fakes.txt"
 
 # One row per screenshot, separated by "|": PNG name | window title | launch arguments.
-# A row's launch arguments select the screen and point a provider's binary path at a fake
-# under $root. The path must be absolute: open starts the app in /. Example row (the setting
-# name depends on the Agents UI):
-#   "claude-approval|Agents|-agentsClaudePath $root/command-approval/claude"
+# @DATA@ becomes the row's fresh scratch data folder. Paths must be absolute: open starts the
+# app in /. A provider's binary path can point at a fake under $root.
 SHOTS=()
-if ((${#SHOTS[@]} == 0)); then
-  echo "agents-shots: no Agents UI shots exist yet."
-  exit 0
+for scenario in empty projects folder-missing; do
+  for appearance in light dark; do
+    SHOTS+=("agents-$scenario-$appearance|Agents|-dataFolder @DATA@ -agentsScenario $scenario -debugAppearance $appearance -sidebarCollapsed NO")
+  done
+done
+SHOTS+=("agents-large-dark|Agents|-dataFolder @DATA@ -agentsScenario large -debugAppearance dark -sidebarCollapsed NO")
+SHOTS+=("agents-projects-collapsed|Agents|-dataFolder @DATA@ -agentsScenario projects -debugAppearance dark -sidebarCollapsed YES")
+# No app can force Increase Contrast, so its shots follow the system setting and are taken only
+# while it is on.
+if [[ "$(defaults read com.apple.universalaccess increaseContrast 2>/dev/null)" == 1 ]]; then
+  for scenario in empty projects folder-missing; do
+    SHOTS+=("agents-$scenario-contrast|Agents|-dataFolder @DATA@ -agentsScenario $scenario -sidebarCollapsed NO")
+  done
+elif [[ "${DEBUG_APP_LOCK_HELD:-}" == 1 ]]; then
+  echo "agents-shots: Increase Contrast is off in System Settings, so its shots are skipped"
 fi
 
 if [[ "${DEBUG_APP_LOCK_HELD:-}" != 1 ]]; then
@@ -54,6 +66,21 @@ if [[ "${DEBUG_APP_LOCK_HELD:-}" != 1 ]]; then
 fi
 
 selected=("$@")
+real_data="$HOME/Library/Application Support/com.openvocally.app.debug"
+scratch="$(mktemp -d)"
+trap 'rm -rf "$scratch"' EXIT
+
+real_db_state() {
+  for file in openvocally.sqlite openvocally.sqlite-wal openvocally.sqlite-shm; do
+    if [[ -e "$real_data/$file" ]]; then
+      stat -f "$file %Fm %z" "$real_data/$file"
+    else
+      echo "$file absent"
+    fi
+  done
+}
+before="$(real_db_state)"
+
 app="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally Dev.app"
 executable="$app/Contents/MacOS/OpenVocally"
 window_id="$PWD/.build/window-id"
@@ -89,7 +116,9 @@ for row in "${SHOTS[@]}"; do
   if ((${#selected[@]})) && [[ " ${selected[*]} " != *" $name "* ]]; then
     continue
   fi
-  read -r -a launch <<<"$args"
+  data="$scratch/$name"
+  mkdir -p "$data"
+  read -r -a launch <<<"${args//@DATA@/$data}"
   if ((first)); then
     RUN_DEBUG_BACKGROUND=1 scripts/run-debug.sh "${launch[@]}" -ApplePersistenceIgnoreState YES
     first=0
@@ -98,15 +127,21 @@ for row in "${SHOTS[@]}"; do
     open_shot "${launch[@]}"
   fi
   status=1
-  for _ in $(seq 1 30); do
+  # The first launch after a build registers the app with Launch Services and takes longest.
+  for _ in $(seq 1 120); do
     sleep 0.5
+    [[ -e "$data/agents-ready" ]] || continue
     pid="$(running | head -n 1)"
     [[ -n "$pid" ]] || continue
     if window="$("$window_id" "$pid" "$title")"; then status=0; break; fi
   done
-  sleep 1
   if ((status != 0)); then
-    echo "agents-shots: no \"$title\" window for $name" >&2
+    echo "agents-shots: no ready \"$title\" window for $name" >&2
+    quit_app
+    exit 1
+  fi
+  if [[ ! -s "$data/openvocally.sqlite" ]]; then
+    echo "agents-shots: $name did not write its scratch database" >&2
     quit_app
     exit 1
   fi
@@ -114,3 +149,11 @@ for row in "${SHOTS[@]}"; do
   echo "$out/$name.png"
 done
 quit_app
+
+after="$(real_db_state)"
+if [[ "$before" != "$after" ]]; then
+  echo "agents-shots: the real Debug database changed during the run" >&2
+  diff <(echo "$before") <(echo "$after") >&2 || true
+  exit 1
+fi
+echo "agents-shots: the real Debug database is unchanged"

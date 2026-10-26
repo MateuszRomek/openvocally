@@ -88,7 +88,7 @@ The app downloads no hosted model until the user picks one. `ModelDownloader` fe
 
 All data lives under `~/Library/Application Support/<bundle ID>`. Debug and Release builds have different bundle IDs, so they never share data.
 
-- `openvocally.sqlite` is the database. Migrations are named, ordered and append-only. A shipped migration is never edited. A new one comes with a committed snapshot (`scripts/storage/record-snapshot.sh`) that the tests check.
+- `openvocally.sqlite` is the database. Migrations are named, ordered and append-only. A shipped migration is never edited. A new one comes with a committed snapshot (`scripts/storage/record-snapshot.sh`) that the tests check. A feature behind a `FEATURE_<NAME>` flag registers its schema last with `registerUnshippedMigration`, in Debug only and with no snapshot. Editing that schema rebuilds the feature's tables in Debug databases. When the feature ships, the schema becomes the next `vN` with its snapshot.
 - `recordings/` holds the audio of a dictation while it transcribes. The audio of a failed dictation stays in `recordings/failed` for 7 days.
 - `local-models/` holds the downloaded models.
 

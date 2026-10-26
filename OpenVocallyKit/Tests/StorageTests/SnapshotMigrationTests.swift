@@ -58,10 +58,21 @@ private func schema(_ reader: any DatabaseReader) throws -> [[String?]] {
 private let recordPath = ProcessInfo.processInfo.environment["STORAGE_RECORD_SNAPSHOT"]
 
 struct SnapshotMigrationTests {
-  @Test func snapshotsExistAndPrefixTheMigrations() {
-    let names = snapshots().map(\.name)
-    #expect(!names.isEmpty)
-    #expect(Array(AppDatabase.migrator.migrations.prefix(names.count)) == names)
+  /// A shipped migration is frozen by its snapshot, so each one has exactly one. An unshipped one
+  /// has none while its schema still changes.
+  @Test func everyShippedMigrationHasASnapshot() {
+    let shipped = AppDatabase.migrator.migrations.filter { !$0.hasPrefix(DatabaseMigrator.unshippedPrefix) }
+    #expect(!shipped.isEmpty)
+    #expect(snapshots().map(\.name) == shipped)
+  }
+
+  /// Release registers only the shipped migrations. A shipped one after an unshipped one would run
+  /// after it in Debug and without it in Release.
+  @Test func unshippedMigrationsComeLast() {
+    let migrations = AppDatabase.migrator.migrations
+    let firstUnshipped =
+      migrations.firstIndex { $0.hasPrefix(DatabaseMigrator.unshippedPrefix) } ?? migrations.endIndex
+    #expect(migrations[firstUnshipped...].allSatisfy { $0.hasPrefix(DatabaseMigrator.unshippedPrefix) })
   }
 
   @Test(arguments: snapshots())

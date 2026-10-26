@@ -25,6 +25,7 @@ format:
 
 test: whisper
 	swift test --package-path OpenVocallyKit
+	./scripts/check-unshipped-features.sh
 	swift build --package-path scripts/latency/capture-probe
 	swift build --package-path scripts/latency/model-bench
 	swift test --package-path scripts/latency/model-bench
