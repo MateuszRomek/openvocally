@@ -13,6 +13,8 @@ package struct DisplayID: Hashable, Sendable {
 package enum NotchEvent: Sendable, Equatable {
   case dictation(DictationPhase)
   case pointer(movedOnto: DisplayID)
+  /// The displays that have a menu bar, the only ones the notch may show on.
+  case displays(withMenuBar: Set<DisplayID>)
   case tick
 
   var cause: Cause {
@@ -22,7 +24,7 @@ package enum NotchEvent: Sendable, Equatable {
       case .starting, .recording, .stopping, .failed(.aborted): .key
       case .transcribing, .pasting, .complete, .failed, .awaitingManualPaste, .idle: .arrival
       }
-    case .pointer: .pointer
+    case .pointer, .displays: .pointer
     case .tick: .timer
     }
   }

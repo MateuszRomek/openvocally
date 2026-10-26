@@ -207,7 +207,7 @@ The dictation notch (`NotchFrameView`, Debug builds behind `FEATURE_NOTCH`) draw
 | `notchWing` | 64 | Width added on each side of the notch at the compact level |
 | `notchWingInset` | 10 | Gap between the camera edge and the content in each wing |
 | `notchDropInset` | 12 | Side and bottom inset of an alert or card below the camera |
-| `notchSimulated` | 185 by 32 | The notch the Design Gallery draws on a Mac without one |
+| `notchSimulated` | 185 by 32 | The notch the Design Gallery draws on a Mac without one; on a display without a camera notch the width, at the menu bar's height |
 | `notchHiddenRadii` | 0 top, 12 bottom | Notch at the hidden level, inside the hardware notch |
 | `notchCompactRadii` | 6 top, 12 bottom | Notch at the compact level |
 | `notchAlertRadii` | 10 top, 20 bottom | Notch at the alert level |

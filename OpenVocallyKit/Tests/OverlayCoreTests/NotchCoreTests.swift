@@ -4,14 +4,15 @@ import Testing
 
 private let one = DisplayID(rawValue: 1)
 private let two = DisplayID(rawValue: 2)
+private let three = DisplayID(rawValue: 3)
 private let manualPasteEnd = HostTime(ticks: 9_000_000_000)
 
 private func strip(_ cue: MotionCue, _ lead: StripLead, on display: UInt32 = 1) -> RecordedFrame {
   RecordedFrame(display: display, footprint: .strip, cue: cue, strip: lead)
 }
 
-private func notice(_ cue: MotionCue, _ notice: Notice) -> RecordedFrame {
-  RecordedFrame(display: 1, footprint: .noticeStrip, cue: cue, strip: .notice(notice))
+private func notice(_ cue: MotionCue, _ notice: Notice, on display: UInt32 = 1) -> RecordedFrame {
+  RecordedFrame(display: display, footprint: .noticeStrip, cue: cue, strip: .notice(notice))
 }
 
 private func hidden(_ cue: MotionCue, on display: UInt32 = 1) -> RecordedFrame {
@@ -29,6 +30,8 @@ struct Row: CustomTestStringConvertible, Sendable {
 private let press: NotchEvent = .dictation(.starting(.pushToTalk))
 private let recording: NotchEvent = .dictation(.recording(.pushToTalk))
 private let onOne: NotchEvent = .pointer(movedOnto: one)
+private let onTwo: NotchEvent = .pointer(movedOnto: two)
+private let onThree: NotchEvent = .pointer(movedOnto: three)
 
 private let failureReasons: [DictationFailureReason] = [
   .microphonePermissionDenied,
@@ -116,6 +119,38 @@ private let rows: [Row] =
       name: "ticks with nothing due change nothing",
       events: [(onOne, .zero), (recording, .zero), (.tick, .seconds(1)), (.tick, .zero)],
       expected: [strip(.appear, .voice(.recording))]),
+    Row(
+      name: "pointer onto a display without a menu bar while recording",
+      events: [(onOne, .zero), (recording, .zero), (onThree, .seconds(1))],
+      expected: [strip(.appear, .voice(.recording)), hidden(.shrink, on: 1)]),
+    Row(
+      name: "press on a display without a menu bar shows once the pointer reaches one",
+      events: [(onThree, .zero), (recording, .zero), (onTwo, .seconds(1))],
+      expected: [strip(.appear, .voice(.recording), on: 2)]),
+    Row(
+      name: "the active display is unplugged mid-recording",
+      events: [
+        (onOne, .zero), (recording, .zero), (.displays(withMenuBar: [two]), .seconds(1)),
+        (onTwo, .milliseconds(150)),
+      ],
+      expected: [
+        strip(.appear, .voice(.recording)), hidden(.shrink, on: 1),
+        strip(.appear, .voice(.recording), on: 2),
+      ]),
+    Row(
+      name: "a display gains a menu bar under the pointer while recording",
+      events: [
+        (.displays(withMenuBar: [one]), .zero), (onTwo, .zero), (recording, .zero),
+        (.displays(withMenuBar: [one, two]), .seconds(1)),
+      ],
+      expected: [strip(.appear, .voice(.recording), on: 2)]),
+    Row(
+      name: "notice hand-off between displays with a menu bar",
+      events: [(onOne, .zero), (.dictation(.failed(.noSpeech)), .zero), (onTwo, .seconds(1))],
+      expected: [
+        notice(.appear, .failure(.noSpeech)), hidden(.shrink, on: 1),
+        notice(.appear, .failure(.noSpeech), on: 2),
+      ]),
   ] + failureRows
 
 struct NotchCoreTests {
@@ -133,5 +168,13 @@ struct NotchCoreTests {
     let outcome = core.send(.dictation(.recording(.toggle)), at: HostTime(ticks: 1))
     #expect(outcome.frames.isEmpty)
     #expect(core.scene.strip == .voice(.recording))
+  }
+
+  @Test func `nothing shows before the displays with a menu bar are known`() {
+    var core = NotchCore()
+    _ = core.send(.pointer(movedOnto: one), at: HostTime(ticks: 1))
+    let outcome = core.send(.dictation(.recording(.toggle)), at: HostTime(ticks: 2))
+    #expect(outcome.frames.isEmpty)
+    #expect(core.activeDisplay == nil)
   }
 }
