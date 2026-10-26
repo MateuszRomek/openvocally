@@ -109,14 +109,19 @@ func fake(_ kind: AgentKind, _ scenario: ScenarioID) throws -> URL {
 }
 
 @MainActor
+/// Ticks on the main actor and keeps the longest gap between ticks. Code that held the main actor
+/// through a probe leaves a gap as long as the probe; a busy machine only slows the ticks down.
 final class Ticker {
-  private(set) var ticks = 0
+  private(set) var longestGap: Duration = .zero
   private var task: Task<Void, Never>?
 
   func start() {
     task = Task { @MainActor [weak self] in
+      var last = ContinuousClock.now
       while !Task.isCancelled {
-        self?.ticks += 1
+        let now = ContinuousClock.now
+        if let self { self.longestGap = max(self.longestGap, now - last) }
+        last = now
         try? await Task.sleep(for: .milliseconds(50))
       }
     }

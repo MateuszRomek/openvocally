@@ -194,8 +194,8 @@ struct HealthTests {
     #expect(
       service[.claude].health
         == .needsAttention(skipped: [SkippedCopy(path: hang, origin: .chosen, reason: .timedOut)]))
-    #expect(elapsed < .seconds(1) + Subprocess.killGrace + .seconds(1))
-    #expect(ticker.ticks >= 12)
+    #expect(elapsed < .seconds(10), "timed out instead of waiting for the 600 s hang")
+    #expect(ticker.longestGap < .seconds(1), "the main actor was never held for the 1 s probe")
   }
 
   @Test func aSignInThatHangsCannotBeConfirmedAndDoesNotBlock() async throws {
