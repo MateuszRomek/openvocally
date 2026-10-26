@@ -5,6 +5,7 @@ extension NotchInputs {
     switch event {
     case .dictation(let phase): apply(phase, at: now)
     case .pointer(let display): pointerDisplay = display
+    case .displays(let displays): menuBarDisplays = displays
     case .tick:
       if let dictation, dictation.voice == .starting, let deadline = connectingDeadline,
         now >= deadline

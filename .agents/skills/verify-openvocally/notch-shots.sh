@@ -17,7 +17,9 @@ clicks or keys, never takes focus and never moves the cursor.
 
 Variants default to: default, light (-notchAppearance aqua), dark (darkAqua),
 increase-contrast-light (highContrastAqua), increase-contrast-dark (highContrastDarkAqua) and
-reduce-motion (-notchReduceMotion YES).
+reduce-motion (-notchReduceMotion YES). no-menu-bar (-notchSeparateSpaces NO) gives only the
+primary display a menu bar, so every display but the primary must show nothing. Join names
+with + to combine them, such as dark+no-menu-bar.
 
 Writes .build/notch-shots/<display>-<variant>/<scene>.png and the contact sheet
 .build/notch-shots/<display>-<variant>.png, and prints each sheet path. Needs Screen Recording
@@ -73,6 +75,15 @@ finish() {
 trap finish EXIT
 
 variant_args() {
+  local name
+  local -a names
+  IFS=+ read -r -a names <<<"$1"
+  for name in "${names[@]}"; do
+    single_variant_args "$name"
+  done
+}
+
+single_variant_args() {
   case "$1" in
     default) ;;
     light) echo -notchAppearance aqua ;;
@@ -80,6 +91,7 @@ variant_args() {
     increase-contrast-light) echo -notchAppearance highContrastAqua ;;
     increase-contrast-dark) echo -notchAppearance highContrastDarkAqua ;;
     reduce-motion) echo -notchReduceMotion YES ;;
+    no-menu-bar) echo -notchSeparateSpaces NO ;;
     *)
       echo "notch-shots: unknown variant $1" >&2
       exit 2
@@ -102,7 +114,8 @@ wait_for() {
 
 sheets=()
 for variant in "${variants[@]}"; do
-  read -r -a extra <<<"$(variant_args "$variant")"
+  args="$(variant_args "$variant" | tr '\n' ' ')"
+  read -r -a extra <<<"$args"
   quit_app
   : >"$log"
   [[ -z "$streamer" ]] || kill "$streamer" 2>/dev/null || true

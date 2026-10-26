@@ -12,4 +12,5 @@ struct NotchInputs: Sendable, Equatable {
   var notice: Notice?
   var flash: Flash?
   var pointerDisplay: DisplayID?
+  var menuBarDisplays: Set<DisplayID> = []
 }

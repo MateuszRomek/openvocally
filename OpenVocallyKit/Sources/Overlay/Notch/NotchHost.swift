@@ -27,16 +27,19 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   private let pointer: @MainActor () -> CGPoint
   private let reduceMotion: Bool?
   private let appearance: NSAppearance.Name?
+  private let separateSpaces: Bool?
 
   /// `reduceMotion` forces the Reduce Motion variant on or off; nil follows the system.
   /// `appearance` forces the panels' appearance, such as Increase Contrast; nil follows the app.
+  /// `separateSpaces` forces whether every display has a menu bar; nil follows the system.
   public init(
     pointer: @escaping @MainActor () -> CGPoint = { NSEvent.mouseLocation }, reduceMotion: Bool? = nil,
-    appearance: NSAppearance.Name? = nil
+    appearance: NSAppearance.Name? = nil, separateSpaces: Bool? = nil
   ) {
     self.pointer = pointer
     self.reduceMotion = reduceMotion
     self.appearance = appearance
+    self.separateSpaces = separateSpaces
   }
 
   /// The display showing a visible scene and its panel's window number, for a Debug harness
@@ -57,7 +60,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   /// compositor's next frame remains (LB-01).
   public func show(_ phase: DictationPhase) {
     if panels.isEmpty { rebuild() }
-    if let display = pointerDisplay(), display != core.activeDisplay?.rawValue {
+    if let display = pointerDisplay(), display != core.pointerDisplay?.rawValue {
       send(.pointer(movedOnto: DisplayID(rawValue: display)))
     }
     send(.dictation(phase))
@@ -90,8 +93,8 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     scheduleTick()
   }
 
-  /// Logs and follows the visible scene's display as it appears, moves and hides.
   private func track() {
+    if core.scene == .hidden { stopFollowing() } else { startFollowing() }
     let visible = core.scene == .hidden ? nil : core.activeDisplay?.rawValue
     guard visible != shownOn else { return }
     let old = shownOn
@@ -100,13 +103,13 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     case (nil, let to?):
       logger.notice("Overlay shown on display \(to, privacy: .public)")
       checkVisible(on: to)
-      startFollowing()
     case (_?, let to?):
       logger.notice("Overlay moved to display \(to, privacy: .public)")
       checkVisible(on: to)
     case (_?, nil):
       logger.notice("Overlay hidden")
-      stopFollowing()
+      check?.cancel()
+      check = nil
     case (nil, nil):
       break
     }
@@ -177,7 +180,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     guard
       let to = OverlayHost.display(
         containing: pointer(), in: screens.map { (id: $0.id, frame: $0.screen.frame) }),
-      to != core.activeDisplay?.rawValue
+      to != core.pointerDisplay?.rawValue
     else { return }
     send(.pointer(movedOnto: DisplayID(rawValue: to)))
   }
@@ -215,6 +218,15 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   /// A display that disappears takes its frame with it; the pointer poll moves the scene on.
   private func rebuild() {
     let screens = Self.screens()
+    // A display's own menu bar is the gap above its visible frame. An auto-hidden menu bar leaves
+    // no gap, so the main menu's height stands in; `NSStatusBar.system.thickness` reports 22
+    // where the menu bar is 30.
+    let reported = NSApp.mainMenu?.menuBarHeight ?? 0
+    let fallback = reported > 0 ? reported : OverlayMetrics.notchSimulated.height
+    func menuBarHeight(_ screen: NSScreen) -> CGFloat {
+      let gap = screen.frame.maxY - screen.visibleFrame.maxY
+      return gap > 0 ? gap : fallback
+    }
     let ids = Set(screens.map(\.id))
     for (id, panel) in panels where !ids.contains(id) {
       panel.panel.orderOut(nil)
@@ -222,14 +234,20 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     }
     for screen in screens {
       if let panel = panels[screen.id] {
-        panel.place(on: screen.screen)
+        panel.place(on: screen.screen, menuBarHeight: menuBarHeight(screen.screen))
       } else {
-        let panel = NotchPanel(bars: bars, reduceMotion: reduceMotion, screen: screen.screen)
+        let panel = NotchPanel(
+          bars: bars, reduceMotion: reduceMotion, screen: screen.screen,
+          menuBarHeight: menuBarHeight(screen.screen))
         panel.panel.appearance = appearance.flatMap(NSAppearance.init(named:))
         panel.prewarm()
         panels[screen.id] = panel
       }
     }
+    // Without separate Spaces only the primary display, the first screen, has a menu bar.
+    let withMenuBar =
+      (separateSpaces ?? NSScreen.screensHaveSeparateSpaces) ? screens : Array(screens.prefix(1))
+    send(.displays(withMenuBar: Set(withMenuBar.map { DisplayID(rawValue: $0.id) })))
   }
 
   private func observeScreens() {
@@ -259,9 +277,9 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   let hosting: NSHostingView<NotchRoot>
   let model: NotchPanelModel
 
-  init(bars: BarsModel, reduceMotion: Bool?, screen: NSScreen) {
+  init(bars: BarsModel, reduceMotion: Bool?, screen: NSScreen, menuBarHeight: CGFloat) {
     let panel = NonActivatingPanel.overlay(size: OverlayMetrics.canvas)
-    model = NotchPanelModel(placement: NotchPlacement(screen))
+    model = NotchPanelModel(placement: NotchPlacement(screen, menuBarHeight: menuBarHeight))
     let hosting = NSHostingView(rootView: NotchRoot(model: model, bars: bars, reduceMotion: reduceMotion))
     hosting.sizingOptions = []
     panel.contentView = hosting
@@ -270,8 +288,8 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     panel.setFrame(model.placement.panelFrame(on: screen.frame), display: false)
   }
 
-  func place(on screen: NSScreen) {
-    let placement = NotchPlacement(screen)
+  func place(on screen: NSScreen, menuBarHeight: CGFloat) {
+    let placement = NotchPlacement(screen, menuBarHeight: menuBarHeight)
     panel.setFrame(placement.panelFrame(on: screen.frame), display: false)
     guard placement != model.placement else { return }
     model.placement = placement

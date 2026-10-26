@@ -17,6 +17,10 @@ struct NotchRig {
   private var now = HostTime(ticks: 1_000_000_000)
   private(set) var frames: [RecordedFrame] = []
 
+  init() {
+    deliver(.displays(withMenuBar: [DisplayID(rawValue: 1), DisplayID(rawValue: 2)]))
+  }
+
   mutating func send(_ event: NotchEvent, after delay: Duration = .zero) {
     let target = now.advanced(by: delay)
     while let deadline = core.nextDeadline, deadline <= target {
