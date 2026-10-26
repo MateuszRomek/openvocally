@@ -49,6 +49,12 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     return (shownOn, panel.panel.windowNumber)
   }
 
+  /// The displays whose panel draws a visible scene, for a Debug harness that proves at most
+  /// one display shows the notch.
+  public var drawnDisplays: [CGDirectDisplayID] {
+    panels.filter { $0.value.model.drawing.scene != .hidden }.keys.sorted()
+  }
+
   /// Builds a panel for every display and draws a recording frame into each while invisible,
   /// so the first press pays for neither the backing store nor the text and symbol caches.
   public func prewarm() {
@@ -145,16 +151,14 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
       ])
   }
 
-  /// The display under the pointer, else the main display, else the first.
+  /// The display under the pointer, else the primary display, which always has a menu bar.
   private func pointerDisplay() -> CGDirectDisplayID? {
     let screens = Self.screens()
     let found = OverlayHost.display(
       containing: pointer(), in: screens.map { (id: $0.id, frame: $0.screen.frame) })
-    let target =
-      screens.first { $0.id == found }
-      ?? screens.first { $0.screen == NSScreen.main } ?? screens.first
+    let target = found ?? screens.first?.id
     if target == nil { logger.notice("Overlay skipped: no display") }
-    return target?.id
+    return target
   }
 
   private func startFollowing() {
@@ -214,19 +218,15 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     }
   }
 
-  /// Idempotent: keeps panels whose display still exists, drops the rest and prewarms new ones.
-  /// A display that disappears takes its frame with it; the pointer poll moves the scene on.
+  /// Idempotent: keeps panels whose display still exists, drops the rest and prewarms new ones,
+  /// then tells the core which displays have a menu bar, which moves the scene off a display
+  /// that disappeared.
   private func rebuild() {
     let screens = Self.screens()
-    // A display's own menu bar is the gap above its visible frame. An auto-hidden menu bar leaves
-    // no gap, so the main menu's height stands in; `NSStatusBar.system.thickness` reports 22
-    // where the menu bar is 30.
+    // `NSStatusBar.system.thickness` reports 22 where the menu bar is 30, so the main menu's
+    // height is the fallback for a menu bar that leaves no gap.
     let reported = NSApp.mainMenu?.menuBarHeight ?? 0
     let fallback = reported > 0 ? reported : OverlayMetrics.notchSimulated.height
-    func menuBarHeight(_ screen: NSScreen) -> CGFloat {
-      let gap = screen.frame.maxY - screen.visibleFrame.maxY
-      return gap > 0 ? gap : fallback
-    }
     let ids = Set(screens.map(\.id))
     for (id, panel) in panels where !ids.contains(id) {
       panel.panel.orderOut(nil)
@@ -234,20 +234,20 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     }
     for screen in screens {
       if let panel = panels[screen.id] {
-        panel.place(on: screen.screen, menuBarHeight: menuBarHeight(screen.screen))
+        panel.place(on: screen.screen, fallbackMenuBarHeight: fallback)
       } else {
         let panel = NotchPanel(
           bars: bars, reduceMotion: reduceMotion, screen: screen.screen,
-          menuBarHeight: menuBarHeight(screen.screen))
+          fallbackMenuBarHeight: fallback)
         panel.panel.appearance = appearance.flatMap(NSAppearance.init(named:))
         panel.prewarm()
         panels[screen.id] = panel
       }
     }
-    // Without separate Spaces only the primary display, the first screen, has a menu bar.
-    let withMenuBar =
-      (separateSpaces ?? NSScreen.screensHaveSeparateSpaces) ? screens : Array(screens.prefix(1))
-    send(.displays(withMenuBar: Set(withMenuBar.map { DisplayID(rawValue: $0.id) })))
+    let withMenuBar = MenuBarPresence.displays(
+      screens.map { DisplayID(rawValue: $0.id) },
+      separateSpaces: separateSpaces ?? NSScreen.screensHaveSeparateSpaces)
+    send(.displays(withMenuBar: Set(withMenuBar)))
   }
 
   private func observeScreens() {
@@ -277,9 +277,10 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   let hosting: NSHostingView<NotchRoot>
   let model: NotchPanelModel
 
-  init(bars: BarsModel, reduceMotion: Bool?, screen: NSScreen, menuBarHeight: CGFloat) {
+  init(bars: BarsModel, reduceMotion: Bool?, screen: NSScreen, fallbackMenuBarHeight: CGFloat) {
     let panel = NonActivatingPanel.overlay(size: OverlayMetrics.canvas)
-    model = NotchPanelModel(placement: NotchPlacement(screen, menuBarHeight: menuBarHeight))
+    model = NotchPanelModel(
+      placement: NotchPlacement(screen, fallbackMenuBarHeight: fallbackMenuBarHeight))
     let hosting = NSHostingView(rootView: NotchRoot(model: model, bars: bars, reduceMotion: reduceMotion))
     hosting.sizingOptions = []
     panel.contentView = hosting
@@ -288,8 +289,8 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
     panel.setFrame(model.placement.panelFrame(on: screen.frame), display: false)
   }
 
-  func place(on screen: NSScreen, menuBarHeight: CGFloat) {
-    let placement = NotchPlacement(screen, menuBarHeight: menuBarHeight)
+  func place(on screen: NSScreen, fallbackMenuBarHeight: CGFloat) {
+    let placement = NotchPlacement(screen, fallbackMenuBarHeight: fallbackMenuBarHeight)
     panel.setFrame(placement.panelFrame(on: screen.frame), display: false)
     guard placement != model.placement else { return }
     model.placement = placement

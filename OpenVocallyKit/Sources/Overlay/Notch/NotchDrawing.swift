@@ -68,13 +68,21 @@ struct NotchPlacement: Equatable, Sendable {
   /// A real notch hides the hidden shape behind the camera; without one, hidden draws nothing.
   let hardware: Bool
 
-  @MainActor init(_ screen: NSScreen, menuBarHeight: CGFloat) {
-    if let notch = NotchGeometry(ScreenGeometry(screen)) {
+  @MainActor init(_ screen: NSScreen, fallbackMenuBarHeight: CGFloat) {
+    self.init(ScreenGeometry(screen), fallbackMenuBarHeight: fallbackMenuBarHeight)
+  }
+
+  /// `fallbackMenuBarHeight` sizes the notch on a display whose menu bar leaves no gap above
+  /// its visible frame, such as an auto-hidden one.
+  init(_ screen: ScreenGeometry, fallbackMenuBarHeight: CGFloat) {
+    if let notch = NotchGeometry(screen) {
       self.init(notch: notch, hardware: true)
     } else {
       self.init(
         notch: NotchGeometry(
-          size: CGSize(width: OverlayMetrics.notchSimulated.width, height: menuBarHeight),
+          size: CGSize(
+            width: OverlayMetrics.notchSimulated.width,
+            height: screen.menuBarHeight(fallback: fallbackMenuBarHeight)),
           midX: screen.frame.midX),
         hardware: false)
     }
