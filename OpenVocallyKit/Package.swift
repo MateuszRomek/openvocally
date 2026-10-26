@@ -52,8 +52,13 @@ let package = Package(
     .testTarget(name: "PasteTests", dependencies: ["Paste", "DictationCore"], swiftSettings: strict),
     .target(name: "DesignSystem", swiftSettings: strict),
     .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"], swiftSettings: strict),
-    .target(name: "Overlay", dependencies: ["DesignSystem", "DictationCore"], swiftSettings: strict),
-    .testTarget(name: "OverlayTests", dependencies: ["Overlay", "DictationCore"], swiftSettings: strict),
+    .target(name: "OverlayCore", dependencies: ["DictationCore"], swiftSettings: strict),
+    .testTarget(
+      name: "OverlayCoreTests", dependencies: ["OverlayCore", "DictationCore"], swiftSettings: strict),
+    .target(
+      name: "Overlay", dependencies: ["DesignSystem", "DictationCore", "OverlayCore"], swiftSettings: strict),
+    .testTarget(
+      name: "OverlayTests", dependencies: ["Overlay", "DictationCore", "OverlayCore"], swiftSettings: strict),
     .target(
       name: "Dictation",
       dependencies: ["DictationCore", "AudioCapture", "Transcription", "Paste"],

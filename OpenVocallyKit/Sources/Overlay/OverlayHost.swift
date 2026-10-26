@@ -196,7 +196,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
 
   /// The centre of the frontmost app's front window, in global screen points. Skips the
   /// transparent strip a full-screen window keeps above itself.
-  private static func focusedWindowCentre() -> CGPoint? {
+  static func focusedWindowCentre() -> CGPoint? {
     guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
       let windows = CGWindowListCopyWindowInfo(
         [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]],
@@ -319,17 +319,6 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
 
   var visiblePanel: NSPanel? {
     activePanel.flatMap { $0.isShown ? $0.panel : nil }
-  }
-}
-
-/// Never key and never main, so the overlay cannot take focus from the paste target.
-private final class NonActivatingPanel: NSPanel {
-  override var canBecomeKey: Bool { false }
-  override var canBecomeMain: Bool { false }
-
-  /// The notch canvas covers the menu bar, where AppKit would otherwise push a window down.
-  override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
-    frameRect
   }
 }
 

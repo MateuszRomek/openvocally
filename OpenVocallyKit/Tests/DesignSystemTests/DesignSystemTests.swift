@@ -13,8 +13,10 @@ import Testing
   #expect(radii == radii.sorted())
 }
 
-@Test func onlyDecorationStopsUnderReduceMotion() {
-  #expect(Motion.allCases.filter { $0.reduced == nil } == [.overlayMeter])
+/// `keyboard` is not decoration, but a key's feedback is instant under Reduce Motion rather than
+/// faded in, so the first frame after a press already shows it.
+@Test func onlyDecorationAndKeyFeedbackStopUnderReduceMotion() {
+  #expect(Motion.allCases.filter { $0.reduced == nil } == [.overlayMeter, .keyboard, .meter])
   #expect(Motion.overlayExpand.resolved(reduceMotion: true) == Motion.overlayExpand.reduced)
   #expect(Motion.overlayExpand.resolved(reduceMotion: false) == Motion.overlayExpand.animation)
 }

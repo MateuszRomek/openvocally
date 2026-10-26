@@ -14,6 +14,7 @@ lint:
 	./scripts/check-public-api.py
 	./scripts/check-references.sh
 	./scripts/check-design-tokens.sh
+	./scripts/check-overlay-motion.sh
 	./scripts/attributions/generate.py --check
 	./scripts/lint-scripts.sh
 	./scripts/latency/check-dictation-latency.sh

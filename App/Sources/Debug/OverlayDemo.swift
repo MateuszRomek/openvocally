@@ -6,6 +6,12 @@
 
   private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay-demo")
 
+  #if FEATURE_NOTCH
+    typealias DemoOverlay = NotchHost
+  #else
+    typealias DemoOverlay = OverlayHost
+  #endif
+
   /// Launch with `-overlayDemo YES` to drive the real overlay through a scripted loop instead of
   /// the hotkeys, `-overlayStyle notch` or `island` to pick its style, and `-overlayPlacement
   /// islandTop` or `islandBottom` to pick the island's edge.
@@ -15,10 +21,10 @@
       UserDefaults.standard.bool(forKey: "overlayDemo")
     }
 
-    static func run(_ overlay: OverlayHost) async {
+    static func run(_ overlay: DemoOverlay) async {
       while !Task.isCancelled {
         await step("starting", .starting(.pushToTalk), for: .milliseconds(400), overlay)
-        overlay.show(OverlayActivity(dictation: .recording(.pushToTalk)), from: .dictation)
+        show(.recording(.pushToTalk), on: overlay)
         logger.info("recording with meter")
         await feedMeter(overlay, for: .milliseconds(2500))
         await step("transcribing", .transcribing, for: .milliseconds(700), overlay)
@@ -27,10 +33,9 @@
         await step("hidden", .idle, for: .seconds(1), overlay)
 
         logger.info("connecting bluetooth mic")
-        overlay.show(
-          OverlayActivity(dictation: .starting(.pushToTalk), wakingMicrophone: true), from: .dictation)
+        show(.starting(.pushToTalk), wakingMicrophone: true, on: overlay)
         try? await Task.sleep(for: .milliseconds(1800))
-        overlay.show(OverlayActivity(dictation: .recording(.pushToTalk)), from: .dictation)
+        show(.recording(.pushToTalk), on: overlay)
         await feedMeter(overlay, for: .milliseconds(1500))
         await step("hidden", .idle, for: .seconds(1), overlay)
 
@@ -48,14 +53,24 @@
     }
 
     private static func step(
-      _ name: String, _ phase: DictationPhase, for duration: Duration, _ overlay: OverlayHost
+      _ name: String, _ phase: DictationPhase, for duration: Duration, _ overlay: DemoOverlay
     ) async {
       logger.info("\(name, privacy: .public)")
-      overlay.show(OverlayActivity(dictation: phase), from: .dictation)
+      show(phase, on: overlay)
       try? await Task.sleep(for: duration)
     }
 
-    private static func feedMeter(_ overlay: OverlayHost, for duration: Duration) async {
+    /// A waking microphone needs no call of its own on the notch: its core shows Connecting
+    /// once the start outlasts the delay.
+    static func show(_ phase: DictationPhase, wakingMicrophone: Bool = false, on overlay: DemoOverlay) {
+      #if FEATURE_NOTCH
+        overlay.show(phase)
+      #else
+        overlay.show(OverlayActivity(dictation: phase, wakingMicrophone: wakingMicrophone), from: .dictation)
+      #endif
+    }
+
+    private static func feedMeter(_ overlay: DemoOverlay, for duration: Duration) async {
       let start = ContinuousClock.now
       while ContinuousClock.now - start < duration, !Task.isCancelled {
         let t = (ContinuousClock.now - start) / .seconds(1)

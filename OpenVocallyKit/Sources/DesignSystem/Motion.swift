@@ -17,6 +17,20 @@ public enum Motion: String, CaseIterable, Sendable {
   case overlayContentSwap
   /// Meter bars follow the microphone level. Decoration: the bars freeze under Reduce Motion.
   case overlayMeter
+  /// The notch grows to a bigger footprint for anything but a key press: a result arriving, the
+  /// pointer bringing it to another display.
+  case grow
+  /// The notch shrinks to a smaller footprint, or leaves. Critically damped, so the shape never
+  /// dips inside the hardware notch.
+  case shrink
+  /// The notch resizes because of a key press. Under Reduce Motion it is instant: a key's
+  /// feedback, the recording mark on a press included, never fades in.
+  case keyboard
+  /// Notch content changes within one footprint. Pair it with `.transition(.blurReplace)`.
+  case content
+  /// The notch's meter bars follow the microphone level. Decoration: the bars freeze under
+  /// Reduce Motion.
+  case meter
   /// A banner or row appearing in a window.
   case windowReveal
   /// A row or section opening in place.
@@ -47,6 +61,11 @@ public enum Motion: String, CaseIterable, Sendable {
     case .overlayHide: .spring(response: 0.22, dampingFraction: 1)
     case .overlayContentSwap: .smooth(duration: 0.3)
     case .overlayMeter: .linear(duration: 0.05)
+    case .grow: .spring(response: 0.3, dampingFraction: 0.9)
+    case .shrink: .spring(response: 0.25, dampingFraction: 1)
+    case .keyboard: .spring(response: 0.15, dampingFraction: 1)
+    case .content: .smooth(duration: 0.3)
+    case .meter: .linear(duration: 0.05)
     case .windowReveal: .timingCurve(0.23, 1, 0.32, 1, duration: 0.2)
     case .windowUnfold: .spring(response: 0.35, dampingFraction: 1)
     case .press: .timingCurve(0.23, 1, 0.32, 1, duration: 0.12)
@@ -60,10 +79,11 @@ public enum Motion: String, CaseIterable, Sendable {
   }
 
   /// The Reduce Motion variant: a short crossfade for anything that carries meaning, nothing
-  /// for decoration. Views that move or resize switch to an opacity transition with it.
+  /// for decoration or for a key's feedback. Views that move or resize switch to an opacity transition with it.
   var reduced: Animation? {
     switch self {
-    case .overlayExpand, .overlayGrow, .overlayCollapse, .overlayHide, .overlayContentSwap:
+    case .overlayExpand, .overlayGrow, .overlayCollapse, .overlayHide, .overlayContentSwap, .grow,
+      .shrink, .content:
       .easeInOut(duration: 0.2)
     case .windowReveal, .windowUnfold: .easeOut(duration: 0.15)
     case .press: .easeOut(duration: 0.1)
@@ -71,7 +91,7 @@ public enum Motion: String, CaseIterable, Sendable {
     case .keyCap: .easeOut(duration: 0.1)
     case .onboardingIntro, .onboardingStep: .easeInOut(duration: 0.2)
     case .onboardingExit: .easeOut(duration: 0.15)
-    case .overlayMeter: nil
+    case .overlayMeter, .meter, .keyboard: nil
     }
   }
 

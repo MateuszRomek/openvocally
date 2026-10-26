@@ -137,9 +137,12 @@ struct LeadingMarkView: View {
 /// a wing never adds a subview here. Each sits centered in its wing.
 struct NotchRowLayout: Layout {
   let notch: NotchGeometry
+  var minimumWing = OverlayMetrics.notchWing
 
-  static func wingWidth(leading: CGFloat, trailing: CGFloat) -> CGFloat {
-    max(OverlayMetrics.notchWing, max(leading, trailing) + 2 * OverlayMetrics.notchWingInset)
+  static func wingWidth(
+    leading: CGFloat, trailing: CGFloat, minimum: CGFloat = OverlayMetrics.notchWing
+  ) -> CGFloat {
+    max(minimum, max(leading, trailing) + 2 * OverlayMetrics.notchWingInset)
   }
 
   struct Measured {
@@ -150,7 +153,8 @@ struct NotchRowLayout: Layout {
   func makeCache(subviews: Subviews) -> Measured {
     let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
     let wing = Self.wingWidth(
-      leading: sizes.first?.width ?? 0, trailing: sizes.dropFirst().first?.width ?? 0)
+      leading: sizes.first?.width ?? 0, trailing: sizes.dropFirst().first?.width ?? 0,
+      minimum: minimumWing)
     return Measured(sizes: sizes, wing: wing)
   }
 

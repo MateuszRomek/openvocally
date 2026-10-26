@@ -45,6 +45,13 @@ public enum OverlayMetrics {
   static let notchWingInset: CGFloat = 10
   /// Side and bottom padding of the alert and card text below the notch.
   static let notchDropInset: CGFloat = 12
+  /// The dictation notch's wing at the strip footprint: wide enough for the meter bars, so a
+  /// content change within the strip never resizes the shape.
+  static let notchStripWing =
+    CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * barSpacing + 2 * notchWingInset
+  /// How far the dictation notch's notice reaches below the notch: one line and the countdown
+  /// with their insets, fixed so one notice replacing another never resizes the shape.
+  static let notchNoticeDrop: CGFloat = 48
   /// A 14 and 16 inch MacBook Pro notch, for previews on a Mac without one.
   public static let notchSimulated = CGSize(width: 185, height: 32)
 }
