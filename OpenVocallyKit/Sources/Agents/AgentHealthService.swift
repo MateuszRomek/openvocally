@@ -308,7 +308,13 @@
         }
         let outcome: UpdateOutcome =
           if let now = self[kind].health.installation {
-            now.version > shown.version ? .updated(to: now.version) : .stillOutdated(now.version)
+            if now.version <= shown.version {
+              .stillOutdated(now.version)
+            } else if now.version < kind.spec.minimumVersion {
+              .belowMinimum(now.version, minimum: kind.spec.minimumVersion)
+            } else {
+              .updated(to: now.version)
+            }
           } else {
             .couldNotVerify
           }

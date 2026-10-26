@@ -325,6 +325,23 @@ struct InstallUpdateTests {
     #expect(offer.canStart)
   }
 
+  @Test func anUpdateThatStaysBelowTheMinimumSaysSessionsStillCannotUseIt() async throws {
+    let sandbox = try Sandbox()
+    let cli = try sandbox.versioned(Self.claudePackage, .claude, link: "npm/bin/claude", version: "2.1.200")
+    try sandbox.script("npm/bin/npm", "echo 2.1.250 > '\(cli.version.path)'")
+    let service = sandbox.service(latest: .failure(TestFetchError()))
+    await service.refresh(.launch).value
+
+    await service.installUpdate(for: .claude).value
+
+    let minimum = AgentKind.claude.spec.minimumVersion
+    #expect(service[.claude].updateRun == .finished(.belowMinimum(CLIVersion(2, 1, 250), minimum: minimum)))
+    #expect(
+      service[.claude].updateRun.message
+        == "Updated to 2.1.250, but OpenVocally needs 2.1.268 or newer.")
+    #expect(service[.claude].updateOffer?.isProblem == true)
+  }
+
   @Test func aSecondCallJoinsTheFirst() async throws {
     let sandbox = try Sandbox()
     let cli = try sandbox.versioned(Self.claudePackage, .claude, link: "npm/bin/claude")

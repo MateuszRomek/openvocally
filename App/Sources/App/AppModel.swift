@@ -51,6 +51,9 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
     /// A Settings section to scroll to, such as a provider's; Settings clears it once shown. Stored
     /// here because an extension cannot add stored state.
     var settingsAnchor: String?
+    /// Re-checks the agents on return to the app. Separate from `watchSystem`, which waits for
+    /// Accessibility, so a CLI installed in Terminal shows up without that grant.
+    var agentsActivationWatch: Task<Void, Never>?
   #endif
 
   /// The sidebar badge and the Home banner.
@@ -274,6 +277,9 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
   private func stopInOrder() async {
     launchTask?.cancel()
     systemWatch?.cancel()
+    #if FEATURE_AGENTS
+      agentsActivationWatch?.cancel()
+    #endif
     pipelineRun?.cancel()
     if let pipelineRun { _ = await withDeadline(.seconds(1.5)) { await pipelineRun.value } }
     await input.capture.cancel()
@@ -294,9 +300,6 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
           named: NSApplication.didBecomeActiveNotification)
         {
           await shortcuts.check(hotkeys, reason: "app activation")
-          #if FEATURE_AGENTS
-            await self.agentsDidActivate()
-          #endif
         }
       }
       group.addTask {

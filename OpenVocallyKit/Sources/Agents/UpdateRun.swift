@@ -25,7 +25,7 @@
     /// Whether `message` reports a problem.
     public var isProblem: Bool {
       switch self {
-      case .failed, .finished(.stillOutdated), .finished(.couldNotVerify): true
+      case .failed, .finished(.belowMinimum), .finished(.stillOutdated), .finished(.couldNotVerify): true
       default: false
       }
     }
@@ -34,6 +34,8 @@
   public enum UpdateOutcome: Sendable, Equatable {
     /// Also when the install was already at or past the latest version and nothing ran.
     case updated(to: CLIVersion)
+    /// It moved, but not far enough: sessions still refuse a version below the minimum.
+    case belowMinimum(CLIVersion, minimum: CLIVersion)
     /// It exited 0 and the version did not move.
     case stillOutdated(CLIVersion)
     /// It exited 0 and the re-check found no working copy.
@@ -42,6 +44,8 @@
     public var message: String {
       switch self {
       case .updated(let version): "Updated to \(version). New sessions use it."
+      case .belowMinimum(let version, let minimum):
+        "Updated to \(version), but OpenVocally needs \(minimum) or newer."
       case .stillOutdated(let version): "Still on \(version) after the update."
       case .couldNotVerify: "Couldn’t confirm the new version."
       }
