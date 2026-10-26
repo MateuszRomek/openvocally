@@ -195,6 +195,16 @@ fi
 app="$out_dir/OpenVocally.app"
 ditto "$products/OpenVocally.app" "$app"
 
+fakes="$(find "$app" -type f -perm -u+x \( -name claude -o -name codex -o -name FakeAgentCLI \) -print)"
+if [[ -n "$fakes" ]]; then
+  fail "The Release bundle contains fake agent CLIs: $fakes. Keep AgentFakes and FakeAgentCLI out of library products, project.yml and App/."
+fi
+# A fake linked into the app leaves its module name in the executable's Swift metadata.
+executable="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+if grep -aq AgentFakes "$executable"; then
+  fail "The Release executable $executable links AgentFakes. Keep AgentFakes out of every target the app depends on."
+fi
+
 sign() {
   codesign --force --sign "$identity" --options runtime --timestamp "$@" ||
     fail "codesign failed for ${*: -1}. Check that the Developer ID certificate and its private key are in the login keychain."

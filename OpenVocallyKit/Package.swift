@@ -92,5 +92,13 @@ let package = Package(
       name: "TranscriptionTests",
       dependencies: ["Models", "ModelsTestSupport", "Transcription"],
       swiftSettings: strict),
+    .target(name: "AgentFakes", swiftSettings: strict),
+    .executableTarget(name: "FakeAgentCLI", dependencies: ["AgentFakes"], swiftSettings: strict),
+    // Depends on the executable so `swift test` builds it next to the test bundle.
+    .target(
+      name: "AgentFakesTestSupport", dependencies: ["AgentFakes", "FakeAgentCLI"],
+      path: "Tests/AgentFakesTestSupport", swiftSettings: strict),
+    .testTarget(
+      name: "AgentFakesTests", dependencies: ["AgentFakes", "AgentFakesTestSupport"], swiftSettings: strict),
   ]
 )
