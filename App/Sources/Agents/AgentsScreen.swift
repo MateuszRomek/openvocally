@@ -214,13 +214,19 @@
     let selected: AgentThread.ID?
   }
 
-  /// A project's group header in the thread list. Its actions sit in a menu button, which Tab
-  /// reaches, and in the context menu and VoiceOver's actions on the header. The button stays in
+  /// A project's group header in the thread list. Its actions sit in a "…" button, which Tab
+  /// reaches while Keyboard navigation is on, and in the context menu and VoiceOver's actions on the header. The button stays in
   /// sight, because SwiftUI drops a view at opacity 0 from the accessibility tree.
+  ///
+  /// The button is a plain `Button` that pops an `NSMenu` on press, not a SwiftUI `Menu`: each
+  /// `Menu` builds an AppKit pop-up button, and with 40 headers the list's first open took about
+  /// 11 ms longer at the median.
   private struct ProjectHeader: View {
     let row: ProjectRow
     let actions: AgentsActions
     let agents: AgentsService
+    /// Not observed, so recording the button's frame on every layout redraws nothing.
+    @State private var buttonFrame = FrameBox()
 
     var body: some View {
       HStack(spacing: Space.xs.points) {
@@ -236,15 +242,21 @@
         .accessibilityAddTraits(.isHeader)
         .accessibilityActions { menuItems }
         Spacer(minLength: 0)
-        Menu {
-          menuItems
-        } label: {
-          Image(systemName: "ellipsis")
+        // Drawn as Text so the button is a full line tall, not as short as the dots. The size, color
+        // and inset match the pull-down button this replaced.
+        Button(action: popUpMenu) {
+          Text(Image(systemName: "ellipsis"))
+            .textStyle(.subheadline)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, Space.xs)
         }
-        .menuStyle(.button)
-        .menuIndicator(.hidden)
         .appButton(.quiet, size: .small)
         .fixedSize()
+        .onGeometryChange(for: CGRect.self) {
+          $0.frame(in: .global)
+        } action: {
+          buttonFrame.rect = $0
+        }
         .accessibilityLabel("More for \(row.project.name)")
       }
       .textStyle(.caption)
@@ -253,13 +265,81 @@
       .contextMenu { menuItems }
     }
 
+    private var items: [MenuEntry] {
+      [
+        MenuEntry("Rename…") { actions.beginRename(row) },
+        MenuEntry("Locate…") { Task { await actions.locate(row.id, agents) } },
+        MenuEntry("Show in Finder", isEnabled: row.health != .missing) { actions.showInFinder(row) },
+        MenuEntry("Remove from List", startsGroup: true) { Task { await actions.remove(row.id, agents) } },
+      ]
+    }
+
     @ViewBuilder private var menuItems: some View {
-      Button("Rename…") { actions.beginRename(row) }
-      Button("Locate…") { Task { await actions.locate(row.id, agents) } }
-      Button("Show in Finder") { actions.showInFinder(row) }
-        .disabled(row.health == .missing)
-      Divider()
-      Button("Remove from List") { Task { await actions.remove(row.id, agents) } }
+      ForEach(items, id: \.title) { item in
+        if item.startsGroup { Divider() }
+        Button(item.title, action: item.run).disabled(!item.isEnabled)
+      }
+    }
+
+    /// Opens the menu under the button, left edges aligned, as a pull-down button does. A click
+    /// and a key press open it in the same place, because it follows the button, not the pointer.
+    private func popUpMenu() {
+      guard let view = NSApp.keyWindow?.contentView else { return }
+      let menu = NSMenu()
+      menu.autoenablesItems = false
+      let target = MenuTarget(items.map(\.run))
+      for (index, item) in items.enumerated() {
+        if item.startsGroup { menu.addItem(.separator()) }
+        let entry = NSMenuItem(
+          title: item.title, action: #selector(MenuTarget.perform(_:)), keyEquivalent: "")
+        entry.target = target
+        entry.tag = index
+        entry.isEnabled = item.isEnabled
+        menu.addItem(entry)
+      }
+      // AppKit draws the menu's frame above the point it is given, so the gap keeps it off the
+      // button.
+      let frame = buttonFrame.rect
+      let below = frame.maxY + Space.s.points
+      let y = view.isFlipped ? below : view.bounds.height - below
+      // A menu item's target is weak, and the chosen item runs before popUp returns.
+      withExtendedLifetime(target) {
+        _ = menu.popUp(positioning: nil, at: NSPoint(x: frame.minX, y: y), in: view)
+      }
+    }
+  }
+
+  /// One action in a project's menu. The "…" menu, the context menu and VoiceOver's actions all
+  /// list `ProjectHeader.items`, so they offer the same actions.
+  private struct MenuEntry {
+    let title: String
+    let isEnabled: Bool
+    /// Draws a separator above the entry.
+    let startsGroup: Bool
+    let run: @MainActor () -> Void
+
+    init(
+      _ title: String, isEnabled: Bool = true, startsGroup: Bool = false, run: @escaping @MainActor () -> Void
+    ) {
+      self.title = title
+      self.isEnabled = isEnabled
+      self.startsGroup = startsGroup
+      self.run = run
+    }
+  }
+
+  @MainActor private final class FrameBox {
+    var rect = CGRect.zero
+  }
+
+  /// Runs the entry whose index is the chosen item's tag.
+  @MainActor private final class MenuTarget: NSObject {
+    private let actions: [@MainActor () -> Void]
+    init(_ actions: [@MainActor () -> Void]) { self.actions = actions }
+
+    @objc func perform(_ sender: NSMenuItem) {
+      guard actions.indices.contains(sender.tag) else { return }
+      actions[sender.tag]()
     }
   }
 

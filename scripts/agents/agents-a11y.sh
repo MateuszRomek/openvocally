@@ -9,9 +9,11 @@ Checks that every project in the Agents thread list is reachable without a mouse
 app lock, opens the Debug app in the background with a fresh scratch -dataFolder and
 -agentsScenario projects, and reads the Agents window's accessibility tree with
 scripts/lib/ax-actions.swift. For each seeded project it checks that the header offers Rename to
-VoiceOver and that a "More for <project>" button can take keyboard focus. Prints each failure,
-quits the app, and exits 1 when any check fails. Keeps the tree in .build/agents/a11y-tree.txt. Posts no clicks or keys. The terminal running it
-needs Accessibility access in System Settings.
+VoiceOver and that a "More for <project>" button offers Press. It does not check keyboard focus:
+a SwiftUI button joins the Tab loop only while Keyboard navigation is on in System Settings, like
+every other button in the window. Prints each failure, quits the app, and exits 1 when any check
+fails. Keeps the tree in .build/agents/a11y-tree.txt. Posts no clicks or keys. The terminal
+running it needs Accessibility access in System Settings.
 HELP
   exit 0
 fi
@@ -73,10 +75,10 @@ for project in openvocally "Marketing Site" docs notes-api; do
     echo "FAIL $project: the header offers VoiceOver no Rename action"
     failed=1
   fi
-  if ! grep -F "label=More for $project " "$scratch/tree.txt" | grep -qF "focusable=yes"; then
-    echo "FAIL $project: no focusable More for $project button"
+  if ! grep -F "AXButton label=More for $project actions=" "$scratch/tree.txt" | grep -qF "AXPress"; then
+    echo "FAIL $project: no More for $project button that offers Press"
     failed=1
   fi
 done
-[[ "$failed" == 0 ]] && echo "agents-a11y: every project is reachable by keyboard and VoiceOver"
+[[ "$failed" == 0 ]] && echo "agents-a11y: every project offers its actions to VoiceOver and through its More button"
 exit "$failed"
