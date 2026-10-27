@@ -13,7 +13,7 @@ import Testing
   let home: URL
   let database: AppDatabase
   let agents: AgentsService
-  private let time = TestClock()
+  private let time = FixtureClock()
 
   init() throws {
     let temp = URL(filePath: NSTemporaryDirectory(), directoryHint: .isDirectory)
@@ -77,7 +77,7 @@ import Testing
   }
 }
 
-final class TestClock: Sendable {
+final class FixtureClock: Sendable {
   private let date = Mutex(Date(timeIntervalSince1970: 1_700_000_000))
   var now: Date { date.withLock { $0 } }
   func advance(_ seconds: TimeInterval) { date.withLock { $0 += seconds } }

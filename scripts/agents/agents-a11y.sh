@@ -8,7 +8,7 @@ Usage: scripts/agents/agents-a11y.sh
 Checks that every project in the Agents thread list is reachable without a mouse. Holds the Debug
 app lock, opens the Debug app in the background with a fresh scratch -dataFolder and
 -agentsScenario projects, and reads the Agents window's accessibility tree with
-scripts/lib/ax-dump.swift. For each seeded project it checks that the header offers Rename to
+scripts/lib/ax-actions.swift. For each seeded project it checks that the header offers Rename to
 VoiceOver and that a "More for <project>" button can take keyboard focus. Prints each failure,
 quits the app, and exits 1 when any check fails. Keeps the tree in .build/agents/a11y-tree.txt. Posts no clicks or keys. The terminal running it
 needs Accessibility access in System Settings.
@@ -45,7 +45,7 @@ if [[ -n "$other" ]]; then
   exit 1
 fi
 
-swiftc -O scripts/lib/ax-dump.swift -o "$scratch/ax-dump"
+swiftc -O scripts/lib/ax-actions.swift -o "$scratch/ax-actions"
 quit_app
 trap 'quit_app; rm -rf "$scratch"' EXIT
 open -g "$app" --args -dataFolder "$scratch/data" -agentsScenario projects -sidebarCollapsed NO \
@@ -57,7 +57,7 @@ done
 [[ -e "$scratch/data/agents-ready" ]] || { echo "agents-a11y: the Agents screen never got ready" >&2; exit 1; }
 
 status=0
-"$scratch/ax-dump" "$(running | head -n 1)" Agents >"$scratch/tree.txt" || status=$?
+"$scratch/ax-actions" "$(running | head -n 1)" Agents >"$scratch/tree.txt" || status=$?
 case "$status" in
   0) ;;
   2) echo "agents-a11y: give this terminal Accessibility access in System Settings" >&2; exit 1 ;;

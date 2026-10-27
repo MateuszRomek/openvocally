@@ -8,8 +8,8 @@ let strict: [SwiftSetting] = [
 ]
 
 /// Agents is unfinished. Its code compiles only in Debug, so Release carries none of it. Remove
-/// this, and the `#if FEATURE_AGENTS` around each Agents file, when Agents ships.
-let featureAgents: [SwiftSetting] = [.define("FEATURE_AGENTS", .when(configuration: .debug))]
+/// the define, and the `#if FEATURE_AGENTS` around each Agents file, when Agents ships.
+let agentsSettings = strict + [.define("FEATURE_AGENTS", .when(configuration: .debug))]
 
 let package = Package(
   name: "OpenVocallyKit",
@@ -81,7 +81,7 @@ let package = Package(
       dependencies: [
         .product(name: "GRDB", package: "GRDB.swift"), "AgentsCore", "DictationCore", "Hotkeys", "Reporting",
       ],
-      swiftSettings: strict + featureAgents
+      swiftSettings: agentsSettings
     ),
     .testTarget(
       name: "StorageTests",
@@ -90,11 +90,13 @@ let package = Package(
       ],
       resources: [.copy("Snapshots")],
       swiftSettings: strict),
-    .target(name: "AgentsCore", swiftSettings: strict + featureAgents),
+    .target(name: "AgentsCore", swiftSettings: agentsSettings),
     .testTarget(name: "AgentsCoreTests", dependencies: ["AgentsCore"], swiftSettings: strict),
-    .target(name: "Agents", dependencies: ["AgentsCore", "Storage"], swiftSettings: strict + featureAgents),
+    .target(name: "Agents", dependencies: ["AgentsCore", "Storage"], swiftSettings: agentsSettings),
     .testTarget(
-      name: "AgentsTests", dependencies: ["Agents", "AgentsCore", "Storage"], swiftSettings: strict),
+      name: "AgentsTests",
+      dependencies: ["Agents", "AgentsCore", "Storage", "AgentFakes", "AgentFakesTestSupport"],
+      swiftSettings: agentsSettings),
     .target(name: "Reporting", swiftSettings: strict),
     .testTarget(name: "ReportingTests", dependencies: ["Reporting"], swiftSettings: strict),
     .target(name: "Diagnostics", swiftSettings: strict),

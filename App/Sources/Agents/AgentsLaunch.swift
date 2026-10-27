@@ -32,7 +32,7 @@
         return scenario
       }
 
-      /// The file `scripts/agents/agents-shots.sh` waits for, written once the window shows the
+      /// The file `scripts/agents/agents-screen-shots.sh` waits for, written once the window shows the
       /// seeded projects.
       static var readyFile: URL { AppData.directory.appending(path: "agents-ready") }
 

@@ -61,7 +61,7 @@ struct MainWindow: View {
     splitView
       .frame(minHeight: 550)
       #if FEATURE_AGENTS
-        .agentsAlerts(agentsActions, agents: model.agents)
+        .agentsAlerts(agentsActions, agents: model.projects)
       #endif
       .windowBackground(background)
       // The Dock paths have no SwiftUI environment, so they reopen the window with this one.
@@ -99,6 +99,9 @@ struct MainWindow: View {
     .safeAreaInset(edge: .bottom, spacing: 0) {
       SidebarFooter {
         UpdateNotice(updates: model.updates)
+        #if FEATURE_AGENTS
+          if model.updates.state == .none { AgentUpdateNoticeView(model: model) }
+        #endif
       } content: {
         SidebarRow(
           Screen.settings.title, systemImage: Screen.settings.symbol,
@@ -149,7 +152,7 @@ struct MainWindow: View {
     #if FEATURE_AGENTS
       case .agents:
         AgentsScreen(
-          agents: model.agents, actions: agentsActions, databaseFailed: model.history.isFailed,
+          agents: model.projects, actions: agentsActions, databaseFailed: model.history.isFailed,
           retry: model.reopenDatabase)
     #endif
     case .models: ModelsView(library: model.models).frame(minWidth: Self.detailMinWidth)
@@ -181,3 +184,28 @@ private struct UpdateNotice: View {
     .animation(reduceMotion ? nil : Motion.windowReveal.animation, value: updates.state)
   }
 }
+
+#if FEATURE_AGENTS
+  /// One notice for every coding agent with an unseen update. The app's own update wins the slot.
+  private struct AgentUpdateNoticeView: View {
+    let model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+      Group {
+        if let notice = model.agents.updateNotice {
+          SidebarNotice(
+            notice.title, detail: notice.detail, systemImage: "arrow.down.circle.fill",
+            action: { model.openAgentUpdate(notice) }
+          )
+          .contextMenu {
+            Button("Dismiss") { model.agents.dismiss(notice) }
+          }
+          .accessibilityAction(named: "Dismiss") { model.agents.dismiss(notice) }
+        }
+      }
+      .transition(SidebarNotice.entrance(reduceMotion: reduceMotion))
+      .animation(reduceMotion ? nil : Motion.windowReveal.animation, value: model.agents.updateNotice)
+    }
+  }
+#endif
