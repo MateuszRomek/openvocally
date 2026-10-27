@@ -11,6 +11,10 @@ import SwiftUI
 import Transcription
 import os
 
+#if FEATURE_AGENTS
+  import Agents
+#endif
+
 private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
 
 /// The composition root. It owns the five areas, runs the launch and shutdown order, the menu
@@ -22,6 +26,10 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
   let history: History
   let feedback = DictationFeedback()
   let updates = Updates()
+  #if FEATURE_AGENTS
+    /// The coding agents' health. Starts nothing until launch refreshes it.
+    let agents: AgentHealthService
+  #endif
   /// The add-ons this build ships.
   let extensions: AppExtensions
 
@@ -39,6 +47,14 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
 
   /// The main window's sidebar selection. Command-comma sets it to Settings.
   var screen: Screen = .home
+  #if FEATURE_AGENTS
+    /// A Settings section to scroll to, such as a provider's; Settings clears it once shown. Stored
+    /// here because an extension cannot add stored state.
+    var settingsAnchor: String?
+    /// Re-checks the agents on return to the app. Separate from `watchSystem`, which waits for
+    /// Accessibility, so a CLI installed in Terminal shows up without that grant.
+    var agentsActivationWatch: Task<Void, Never>?
+  #endif
 
   /// The sidebar badge and the Home banner.
   var needsSetup: Bool {
@@ -77,6 +93,10 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
     let history = History()
     self.history = history
     shortcuts = Shortcuts(history: history, promptsForAccessibility: !Onboarding.neededAtLaunch)
+    #if FEATURE_AGENTS
+      agents = AgentHealthService(
+        defaults: AgentsHarness.serviceDefaults(), environment: AgentsHarness.environment())
+    #endif
   }
 
   private static func cueSounds() -> [SoundCue: URL] {
@@ -142,6 +162,9 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
         await DiagnosticsHarness.run(self)
         return
       }
+    #endif
+    #if FEATURE_AGENTS
+      if await agentsDidLaunch() { return }
     #endif
     let archive = RecordingArchive(root: AppData.directory.appending(path: "recordings"))
     async let archiveReady: Void = archive.prepare()
@@ -254,6 +277,9 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
   private func stopInOrder() async {
     launchTask?.cancel()
     systemWatch?.cancel()
+    #if FEATURE_AGENTS
+      agentsActivationWatch?.cancel()
+    #endif
     pipelineRun?.cancel()
     if let pipelineRun { _ = await withDeadline(.seconds(1.5)) { await pipelineRun.value } }
     await input.capture.cancel()

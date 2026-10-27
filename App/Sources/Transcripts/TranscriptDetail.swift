@@ -104,7 +104,7 @@ struct TranscriptDetailPane: View {
       Spacer(minLength: Space.s.points)
       HStack(spacing: Space.xs.points) {
         CopyButton("Copy Transcript", copied: $copied) {
-          TranscriptClipboard.write(detail.text)
+          Clipboard.write(detail.text, announcement: "Transcript copied")
           return true
         }
         IconButton("Delete Transcript", systemImage: "trash") { delete(detail.id) }

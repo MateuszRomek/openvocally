@@ -12,7 +12,11 @@ script that resets permissions or matches processes by name unless the line ends
 "# allowed: <reason>". Fails on MenuBarExtra(isInserted:) bound to a projected value.
 Fails on composedMessage, and on OSLogStore or import OSLog outside
 OpenVocallyKit/Sources/Diagnostics/LogArchive.swift. Fails when a target other than FakeAgentCLI,
-AgentFakesTestSupport and AgentFakesTests depends on AgentFakes in OpenVocallyKit/Package.swift.
+AgentFakesTestSupport, AgentFakesTests and AgentsTests depends on AgentFakes in
+OpenVocallyKit/Package.swift. Fails when a file in OpenVocallyKit/Sources/Agents other than
+Subprocess.swift starts a process, or one other than LoginEnvironment.swift passes "-c".
+Fails when a file in OpenVocallyKit/Sources/Agents does not open with #if FEATURE_AGENTS, so a
+Release build compiles the module empty.
 EOF
   exit 0
 fi
@@ -90,7 +94,7 @@ for ch in text[re.search(r"(?m)^\s*targets:\s*\[", text).end():]:
         continue
     current += ch
 blocks.append(current)
-allowed = {"AgentFakes", "FakeAgentCLI", "AgentFakesTestSupport", "AgentFakesTests"}
+allowed = {"AgentFakes", "FakeAgentCLI", "AgentFakesTestSupport", "AgentFakesTests", "AgentsTests"}
 found = False
 for block in blocks:
     name = re.search(r'name:\s*"([^"]+)"', block)
@@ -100,12 +104,40 @@ for block in blocks:
 sys.exit(1 if found else 0)
 PY
 then
-  echo "AgentFakes is a test double. Only FakeAgentCLI, AgentFakesTestSupport and AgentFakesTests may depend on it in OpenVocallyKit/Package.swift." >&2
+  echo "AgentFakes is a test double. Only FakeAgentCLI, AgentFakesTestSupport, AgentFakesTests and AgentsTests may depend on it in OpenVocallyKit/Package.swift." >&2
   exit 1
 fi
 
 if grep -nE '\.library\(.*(AgentFakes|FakeAgentCLI)' OpenVocallyKit/Package.swift \
   || grep -rnE 'AgentFakes|FakeAgentCLI' project.yml App/; then
   echo "AgentFakes and FakeAgentCLI are test doubles. Remove them from library products in OpenVocallyKit/Package.swift, from project.yml and from App/. The app selects a fake only through a provider's binary path." >&2
+  exit 1
+fi
+
+agents=OpenVocallyKit/Sources/Agents
+if grep -rnE 'posix_spawn|Process\(|\bexecv|\bsystem\(|popen\(' --include='*.swift' "$agents" \
+  | grep -v "^$agents/Subprocess\.swift:"; then
+  echo "Only $agents/Subprocess.swift may start a process. Call Subprocess.run, which never uses a shell, gives the child its own process group and kills it on timeout." >&2
+  exit 1
+fi
+
+if grep -rn '"-c"' --include='*.swift' "$agents" | grep -v "^$agents/LoginEnvironment\.swift:"; then
+  echo "Only $agents/LoginEnvironment.swift may pass \"-c\" to a shell, with its constant command. Pass the executable and an argument array to Subprocess.run instead; launch arguments come from LaunchArguments.split()." >&2
+  exit 1
+fi
+
+# Comments and blank lines may surround it; the first code line opens the flag, the last closes
+# it, and no column-0 #else or #elseif gives Release a branch.
+unflagged=$(find "$agents" -name '*.swift' -exec awk '
+  function check() { if (file != "" && (first !~ /^#if FEATURE_AGENTS[[:space:]]*$/ || last !~ /^#endif[[:space:]]*$/ || branch)) print file }
+  FNR == 1 { check(); file = FILENAME; first = ""; last = ""; branch = 0 }
+  /^[[:space:]]*$/ || /^[[:space:]]*\/\// { next }
+  { if (first == "") first = $0; last = $0 }
+  /^#(else|elseif)/ { branch = 1 }
+  END { check() }
+' {} +)
+if [ -n "$unflagged" ]; then
+  printf '%s\n' "$unflagged" >&2
+  echo "Every file in $agents must start with #if FEATURE_AGENTS and end with #endif, with no top-level #else, so Release builds carry no Agents code. Wrap the whole file in the flag; only comments may come before it." >&2
   exit 1
 fi
