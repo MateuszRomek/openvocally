@@ -1,4 +1,4 @@
-.PHONY: whisper generate lint format test build check run onboarding onboarding-shots smoke-idle overlay-demo install dictation-latency capture-latency device-change device-change-bluetooth speech-check-bluetooth transcripts-latency model-bench model-bench-quick dictation-harness gallery-shots agents-shots diagnostics-export release update-e2e
+.PHONY: whisper generate lint format test build check run onboarding onboarding-shots smoke-idle overlay-demo install dictation-latency capture-latency device-change device-change-bluetooth speech-check-bluetooth transcripts-latency model-bench model-bench-quick dictation-harness gallery-shots agents-shots agents-screen-shots diagnostics-export release update-e2e
 
 # Patched whisper.cpp. Rebuilds only when its script or patch changes.
 whisper:
@@ -25,6 +25,7 @@ format:
 
 test: whisper
 	swift test --package-path OpenVocallyKit
+	./scripts/check-unshipped-features.sh
 	swift build --package-path scripts/latency/capture-probe
 	swift build --package-path scripts/latency/model-bench
 	swift test --package-path scripts/latency/model-bench
@@ -56,6 +57,9 @@ gallery-shots:
 
 agents-shots:
 	./scripts/agents/agents-shots.sh
+
+agents-screen-shots:
+	./scripts/agents/agents-screen-shots.sh
 
 # Opens the Debug app and fails when it is busy while idle (a SwiftUI update loop).
 smoke-idle:

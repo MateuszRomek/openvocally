@@ -66,6 +66,8 @@ targets:
       - package: OpenVocallyKit
         product: Reporting
       - package: OpenVocallyKit
+        product: AgentsCore
+      - package: OpenVocallyKit
         product: Agents
       - package: Sparkle
     info:

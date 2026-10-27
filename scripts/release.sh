@@ -204,6 +204,9 @@ executable="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExe
 if grep -aq AgentFakes "$executable"; then
   fail "The Release executable $executable links AgentFakes. Keep AgentFakes out of every target the app depends on."
 fi
+if grep -aqE 'AgentsService|agent_projects' "$executable"; then
+  fail "The Release executable $executable carries Agents code. Wrap each Agents file in #if FEATURE_AGENTS until Agents ships."
+fi
 
 sign() {
   codesign --force --sign "$identity" --options runtime --timestamp "$@" ||

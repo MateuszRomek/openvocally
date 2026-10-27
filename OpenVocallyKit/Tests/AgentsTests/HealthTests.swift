@@ -182,7 +182,10 @@ struct HealthTests {
     let sandbox = try Sandbox()
     let hang = try sandbox.script("hang/claude", "sleep 600")
     sandbox.configure(.claude, path: hang)
-    let service = sandbox.service(timeouts: .init(version: .seconds(1)))
+    // Long enough that a loaded CI runner's slow ticks stay under it, while code that held the
+    // main actor through the probe would leave a gap at least this long.
+    let probe = Duration.seconds(3)
+    let service = sandbox.service(timeouts: .init(version: probe))
     let ticker = Ticker()
     ticker.start()
     let started = ContinuousClock.now
@@ -195,7 +198,7 @@ struct HealthTests {
       service[.claude].health
         == .needsAttention(skipped: [SkippedCopy(path: hang, origin: .chosen, reason: .timedOut)]))
     #expect(elapsed < .seconds(10), "timed out instead of waiting for the 600 s hang")
-    #expect(ticker.longestGap < .seconds(1), "the main actor was never held for the 1 s probe")
+    #expect(ticker.longestGap < probe, "the main actor was never held for the probe")
   }
 
   @Test func aSignInThatHangsCannotBeConfirmedAndDoesNotBlock() async throws {

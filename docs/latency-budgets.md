@@ -36,6 +36,14 @@ Measured with `make transcripts-latency` (`scripts/latency/transcripts-latency.s
 | LB-09 | Scrolling the Transcripts list at 1 to 20 pages | No frame over 33 ms | Scrolling must stay smooth. |
 | LB-10 | Memory footprint with 20 pages loaded | Under 150 MB | A long history must not grow memory without limit. |
 
+### Agents
+
+Measured with `scripts/agents/agents-bench.sh --screen` (`scripts/agents/agents-bench.sh --help`) on the `large` Debug scenario: 40 projects of 300 threads, with 20 conversation items each. Without `--screen`, the script measures the thread list query alone, off screen, which helps find what limits LB-11.
+
+| ID | Measurement | Budget | Why this number |
+| --- | --- | --- | --- |
+| LB-11 | The first Agents open after launch, from the screen's creation to its thread list drawn | p95 under 150 ms | The first Transcripts open in LB-04 has the same budget. Both lists are built once, at the first open. |
+
 Cold mic means the input device is closed at the press. Warm mic means it is still open from a recent recording. Report both for LB-01.
 
 Change a budget in a pull request that says why.

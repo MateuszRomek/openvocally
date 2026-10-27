@@ -45,6 +45,12 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
   /// Opens the main window from paths outside SwiftUI, such as the Dock menu.
   @ObservationIgnored var windowOpener: OpenWindowAction?
 
+  #if FEATURE_AGENTS
+    /// The Agents screen's projects and threads. Made once the database opens, again after Try
+    /// Again. Nil while it opens or after it failed.
+    private(set) var projects: AgentsService?
+  #endif
+
   /// The main window's sidebar selection. Command-comma sets it to Settings.
   var screen: Screen = .home
   #if FEATURE_AGENTS
@@ -119,6 +125,14 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
   /// wait, and only for Accessibility.
   private func launch() async {
     #if DEBUG
+      DebugAppearance.applyFromArguments()
+      #if FEATURE_AGENTS
+        if let scenario = AgentsLaunch.scenario {
+          projects = await AgentsLaunch.seededService(scenario, database: await history.open())
+          screen = .agents
+          return
+        }
+      #endif
       if TranscriptsHarness.isRequested {
         await TranscriptsHarness.run(self, database: await history.open())
         return
@@ -168,7 +182,12 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
     #endif
     let archive = RecordingArchive(root: AppData.directory.appending(path: "recordings"))
     async let archiveReady: Void = archive.prepare()
-    await history.open()
+    #if FEATURE_AGENTS
+      let database = await history.open()
+      Task { projects = await AgentsLaunch.service(for: database) }
+    #else
+      await history.open()
+    #endif
     guard let hotkeys = await shortcuts.start() else { return }
     systemWatch = Task { await watchSystem(hotkeys) }
     Task { await warmFocusProbe() }
@@ -198,6 +217,9 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
       // double click opens the database once.
       guard case .failed = history.state else { return }
       guard let database = await history.open() else { return }
+      #if FEATURE_AGENTS
+        projects = await AgentsLaunch.service(for: database)
+      #endif
       await shortcuts.adoptStore(database)
     }
   }
