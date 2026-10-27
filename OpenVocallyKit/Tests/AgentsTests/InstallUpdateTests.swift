@@ -380,13 +380,18 @@ struct InstallUpdateTests {
   @Test func aConfigurationChangeDuringAnUpdateIsReplayedAfterIt() async throws {
     let sandbox = try Sandbox()
     let cli = try sandbox.versioned(Self.claudePackage, .claude, link: "npm/bin/claude")
-    try sandbox.script("npm/bin/npm", "sleep 0.3\necho 9.9.9 > '\(cli.version.path)'")
+    let npmStarted = sandbox.url("npm-started")
+    try sandbox.script(
+      "npm/bin/npm", "touch '\(npmStarted.path)'\nsleep 0.3\necho 9.9.9 > '\(cli.version.path)'")
     let service = sandbox.service()
     await service.refresh(.launch).value
 
     let task = service.installUpdate(for: .claude)
-    // npm is in its sleep by now, so the run itself goes on to the end.
-    try await Task.sleep(for: .milliseconds(150))
+    // Waits for npm itself: a change before it starts ends the run without running it, and the
+    // locate step before it can take longer than any fixed sleep on a loaded machine.
+    while !FileManager.default.fileExists(atPath: npmStarted.path) {
+      try await Task.sleep(for: .milliseconds(5))
+    }
     service.setEnabled(false, for: .claude)
     #expect(service[.claude].updateRun == .running)
     await task.value

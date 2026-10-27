@@ -11,12 +11,12 @@ struct SubprocessTests {
     let child = sandbox.url("child")
     let stub = try sandbox.script(
       "hang.sh", "echo $$ > '\(leader.path)'\nsleep 600 &\necho $! > '\(child.path)'\nwait")
-    let started = ContinuousClock.now
+    let started = written(leader)
 
     let result = await Subprocess.run(stub, [], environment: [:], timeout: .seconds(2))
 
     #expect(result.ending == .timedOut)
-    #expect(ContinuousClock.now - started < .seconds(2) + Subprocess.killGrace + .seconds(1))
+    #expect(ContinuousClock.now - (await started.value) < .seconds(2) + Subprocess.killGrace + .seconds(1))
     let leaderPID = try pid(in: leader)
     let childPID = try pid(in: child)
     #expect(kill(leaderPID, 0) == -1 && errno == ESRCH, "the script was reaped")
@@ -51,13 +51,13 @@ struct SubprocessTests {
       echo done
       exit 0
       """)
-    let started = ContinuousClock.now
+    let exiting = written(grandchild)
 
     let result = await Subprocess.run(stub, [], environment: [:], timeout: .seconds(30))
 
     #expect(result.ending == .exited(0))
     #expect(result.stdout == "done\n")
-    #expect(ContinuousClock.now - started < Subprocess.drainGrace + .seconds(2))
+    #expect(ContinuousClock.now - (await exiting.value) < Subprocess.drainGrace + .seconds(2))
     #expect(await gone(try pid(in: grandchild)), "the grandchild holding stdout was killed")
   }
 
@@ -205,6 +205,18 @@ struct SubprocessTests {
     _ = await login.current()
 
     #expect(try String(contentsOf: runs, encoding: .utf8) == "run\nrun\n")
+  }
+
+  /// When `file` first holds something, or after 30 s. The timing tests start their clock there,
+  /// at a line the script runs, so a slow start under a loaded parallel test run doesn't count
+  /// against them.
+  private func written(_ file: URL) -> Task<ContinuousClock.Instant, Never> {
+    Task {
+      for _ in 0..<6000 where (try? Data(contentsOf: file))?.isEmpty ?? true {
+        try? await Task.sleep(for: .milliseconds(5))
+      }
+      return ContinuousClock.now
+    }
   }
 
   private func pid(in file: URL) throws -> pid_t {
