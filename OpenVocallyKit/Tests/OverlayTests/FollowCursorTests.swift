@@ -10,16 +10,16 @@ import Testing
   )
 
   @Test func `a cursor on the second display picks that display`() {
-    #expect(OverlayHost.display(containing: CGPoint(x: 2000, y: 500), in: [Self.left, Self.right]) == 2)
+    #expect(Displays.display(containing: CGPoint(x: 2000, y: 500), in: [Self.left, Self.right]) == 2)
   }
 
   @Test func `a cursor in the gap between displays picks none`() {
-    #expect(OverlayHost.display(containing: CGPoint(x: 700, y: 1000), in: [Self.left, Self.right]) == nil)
+    #expect(Displays.display(containing: CGPoint(x: 700, y: 1000), in: [Self.left, Self.right]) == nil)
   }
 
   @Test func `a cursor on the shared edge belongs to the display on its right`() {
-    #expect(OverlayHost.display(containing: CGPoint(x: 1440, y: 500), in: [Self.left, Self.right]) == 2)
-    #expect(OverlayHost.display(containing: CGPoint(x: 1440, y: 500), in: [Self.right, Self.left]) == 2)
+    #expect(Displays.display(containing: CGPoint(x: 1440, y: 500), in: [Self.left, Self.right]) == 2)
+    #expect(Displays.display(containing: CGPoint(x: 1440, y: 500), in: [Self.right, Self.left]) == 2)
   }
 
   @Test func `a display above and left of the main one is found by negative coordinates`() {
@@ -27,8 +27,8 @@ import Testing
     let upperLeft: (id: CGDirectDisplayID, frame: CGRect) = (
       3, CGRect(x: -2560, y: 1117, width: 2560, height: 1440)
     )
-    #expect(OverlayHost.display(containing: CGPoint(x: -100, y: 2000), in: [main, upperLeft]) == 3)
-    #expect(OverlayHost.display(containing: CGPoint(x: 100, y: 500), in: [main, upperLeft]) == 1)
-    #expect(OverlayHost.display(containing: CGPoint(x: -100, y: 500), in: [main, upperLeft]) == nil)
+    #expect(Displays.display(containing: CGPoint(x: -100, y: 2000), in: [main, upperLeft]) == 3)
+    #expect(Displays.display(containing: CGPoint(x: 100, y: 500), in: [main, upperLeft]) == 1)
+    #expect(Displays.display(containing: CGPoint(x: -100, y: 500), in: [main, upperLeft]) == nil)
   }
 }

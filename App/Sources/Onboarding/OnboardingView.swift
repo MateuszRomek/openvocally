@@ -10,7 +10,7 @@ import Transcription
 struct OnboardingView: View {
   let model: AppModel
   @State private var step = OnboardingStep.first
-  @State private var steps = OnboardingStep.allCases
+  private let steps = OnboardingStep.allCases
   @State private var direction = Motion.StepDirection.forward
   /// A direction change applies its step on the next turn; clicks meanwhile would read a stale step.
   @State private var turning = false
@@ -46,7 +46,6 @@ struct OnboardingView: View {
     .frame(width: Self.size.width, height: Self.size.height)
     .overlay { ConfettiBurst(trigger: celebrating) }
     .onAppear {
-      steps = OnboardingStep.steps(hasNotch: OverlayChoice.hasNotch, including: step)
       model.windowOpener = openWindow
       barShown = true
       connectivity.start()
@@ -110,8 +109,6 @@ struct OnboardingView: View {
       EmptyView()
     case .permissions:
       PermissionsCard(model: model, accessibilityRequested: $accessibilityRequested)
-    case .overlay:
-      OverlayChoice(preview: model.previewOverlay)
     case .shortcut:
       ShortcutStep(shortcuts: model.shortcuts)
     case .model:

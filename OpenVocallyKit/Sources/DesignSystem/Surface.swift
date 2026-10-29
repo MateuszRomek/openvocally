@@ -1,15 +1,11 @@
 import SwiftUI
 
 /// What a view sits on. The macOS 26 HIG keeps Liquid Glass in the control layer, so content
-/// never gets `.control`. The overlay is opaque: the notch is always black like the hardware,
-/// and the island follows light and dark.
+/// never gets `.control`. The notch is opaque and always black, like the hardware.
 public enum Surface: String, CaseIterable, Sendable {
   /// Liquid Glass, for custom controls, or the regular material before macOS 26. Standard
   /// controls, the sidebar and the toolbar get it from the system.
   case control
-  /// The island overlay: white in light mode, black in dark, with a hairline edge and a soft
-  /// shadow so it stays visible on a window of the same color.
-  case island
   /// The notch overlay: always black, so it extends the hardware notch.
   case notch
   /// A standard material, for stat cards, chart panels and grouped lists. It gains a
@@ -41,11 +37,6 @@ private struct SurfaceModifier<S: Shape>: ViewModifier {
       } else {
         content.background(.regularMaterial, in: shape)
       }
-    case .island:
-      content
-        .background(SemanticColor.onAccent.color, in: shape)
-        .overlay { shape.stroke(SemanticColor.separator.color) }
-        .shadow(color: Color(nsColor: .shadowColor).opacity(0.18), radius: 12, y: 4)
     case .notch:
       content
         .foregroundStyle(Color(nsColor: .white))

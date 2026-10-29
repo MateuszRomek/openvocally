@@ -40,20 +40,9 @@ enum Onboarding {
 enum OnboardingStep: Int, CaseIterable {
   case welcome
   case permissions
-  case overlay
   case shortcut
   case model
   case tryIt
-
-  /// The overlay step only offers notch or island, which matters only with a notch; without one
-  /// Settings covers it. `forced` (a Debug `-onboardingStep`) is kept so any step can be opened.
-  static func steps(hasNotch: Bool, including forced: OnboardingStep = .welcome) -> [OnboardingStep] {
-    #if FEATURE_NOTCH
-      allCases.filter { $0 != .overlay || $0 == forced }
-    #else
-      allCases.filter { $0 != .overlay || hasNotch || $0 == forced }
-    #endif
-  }
 
   func next(in steps: [OnboardingStep]) -> OnboardingStep? {
     guard let index = steps.firstIndex(of: self), index + 1 < steps.count else { return nil }
@@ -65,7 +54,7 @@ enum OnboardingStep: Int, CaseIterable {
     return steps[index - 1]
   }
 
-  /// `-onboardingStep overlay` opens a Debug build on that step (`make onboarding STEP=overlay`).
+  /// `-onboardingStep shortcut` opens a Debug build on that step (`make onboarding STEP=shortcut`).
   static var first: OnboardingStep {
     #if DEBUG
       if let name = UserDefaults.standard.string(forKey: "onboardingStep"),
@@ -84,8 +73,6 @@ enum OnboardingStep: Int, CaseIterable {
       ("", "OpenVocally", "Dictate anywhere on your Mac.", "Get Started")
     case .permissions:
       ("lock.shield", "Allow two permissions", "So you can dictate into any app.", "Continue")
-    case .overlay:
-      ("macbook", "Where should it show?", "A small pill shows while you dictate.", "Continue")
     case .shortcut:
       (
         "keyboard", "Two ways to dictate", "Press once to start and again to stop, or hold to talk.",

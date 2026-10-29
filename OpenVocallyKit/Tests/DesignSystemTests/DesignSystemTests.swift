@@ -16,9 +16,9 @@ import Testing
 /// `keyboard` is not decoration, but a key's feedback is instant under Reduce Motion rather than
 /// faded in, so the first frame after a press already shows it.
 @Test func onlyDecorationAndKeyFeedbackStopUnderReduceMotion() {
-  #expect(Motion.allCases.filter { $0.reduced == nil } == [.overlayMeter, .keyboard, .meter])
-  #expect(Motion.overlayExpand.resolved(reduceMotion: true) == Motion.overlayExpand.reduced)
-  #expect(Motion.overlayExpand.resolved(reduceMotion: false) == Motion.overlayExpand.animation)
+  #expect(Motion.allCases.filter { $0.reduced == nil } == [.keyboard, .meter])
+  #expect(Motion.grow.resolved(reduceMotion: true) == Motion.grow.reduced)
+  #expect(Motion.grow.resolved(reduceMotion: false) == Motion.grow.animation)
 }
 
 @Test func controlScaleMapsToTheSystemSizes() {

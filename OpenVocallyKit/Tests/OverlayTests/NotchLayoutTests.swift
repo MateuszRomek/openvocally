@@ -9,34 +9,18 @@ import Testing
 @MainActor struct NotchLayoutTests {
   static let notch = NotchGeometry.simulated
 
-  static func size(of activity: OverlayActivity?) -> CGSize {
-    let body = NotchBody(activity: activity, notch: notch).environment(BarsModel())
-    return NSHostingView(rootView: body).fittingSize
-  }
-
-  @Test func `hidden is exactly the hidden size`() {
-    #expect(Self.size(of: nil) == Self.notch.hiddenSize)
-  }
-
-  @Test func `compact rows are the notch height with wings of at least 64 points`() throws {
-    let recording = Self.size(of: try IslandLayoutTests.dictation(.recording(.toggle)))
-    let transcribing = Self.size(of: try IslandLayoutTests.dictation(.transcribing))
-    let pasted = Self.size(of: try IslandLayoutTests.dictation(.complete))
-    for size in [recording, transcribing, pasted] {
-      #expect(size.height == Self.notch.size.height)
-      #expect(size.width >= Self.notch.size.width + 2 * OverlayMetrics.notchWing)
-    }
-    #expect(recording.width == transcribing.width)
+  static func dictation(_ phase: DictationPhase) throws -> OverlayActivity {
+    try #require(OverlayActivity(dictation: phase))
   }
 
   @Test func `the mic stays through dictation and is bright only while listening`() throws {
-    #expect(LeadingMark(try IslandLayoutTests.dictation(.starting(.pushToTalk))) == .mic(listening: false))
-    #expect(LeadingMark(try IslandLayoutTests.dictation(.recording(.toggle))) == .mic(listening: true))
-    #expect(LeadingMark(try IslandLayoutTests.dictation(.transcribing)) == .mic(listening: false))
-    #expect(LeadingMark(try IslandLayoutTests.dictation(.pasting)) == .mic(listening: false))
-    #expect(LeadingMark(try IslandLayoutTests.dictation(.complete)) == .glyph(.success))
-    #expect(LeadingMark(try IslandLayoutTests.dictation(.failed(.noSpeech))) == .glyph(.attention))
-    #expect(LeadingMark(try IslandLayoutTests.dictation(.failed(.manualPasteExpired))) == nil)
+    #expect(LeadingMark(try Self.dictation(.starting(.pushToTalk))) == .mic(listening: false))
+    #expect(LeadingMark(try Self.dictation(.recording(.toggle))) == .mic(listening: true))
+    #expect(LeadingMark(try Self.dictation(.transcribing)) == .mic(listening: false))
+    #expect(LeadingMark(try Self.dictation(.pasting)) == .mic(listening: false))
+    #expect(LeadingMark(try Self.dictation(.complete)) == .glyph(.success))
+    #expect(LeadingMark(try Self.dictation(.failed(.noSpeech))) == .glyph(.attention))
+    #expect(LeadingMark(try Self.dictation(.failed(.manualPasteExpired))) == nil)
   }
 
   @Test func `a waking mic keeps the dim mic beside its words`() throws {
@@ -51,21 +35,6 @@ import Testing
       NotchRowLayout.wingWidth(leading: 90, trailing: 10)
         == NotchRowLayout.wingWidth(leading: 10, trailing: 90))
     #expect(NotchRowLayout.wingWidth(leading: 90, trailing: 10) == 90 + 2 * OverlayMetrics.notchWingInset)
-  }
-
-  @Test(arguments: DictationActivityTests.phases)
-  func `every dictation state fits the canvas, and alerts grow below the notch`(
-    phase: DictationPhase
-  ) throws {
-    let activity = try IslandLayoutTests.dictation(phase)
-    let size = Self.size(of: activity)
-    if case .alert = activity.body {
-      #expect(size.height > Self.notch.size.height)
-    } else {
-      #expect(size.height == Self.notch.size.height)
-    }
-    #expect(size.width <= OverlayMetrics.canvas.width)
-    #expect(size.height <= OverlayMetrics.canvas.height)
   }
 
   @Test func `the shape never draws smaller than the hidden size and stays on the top edge`() {

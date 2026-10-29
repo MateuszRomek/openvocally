@@ -1,11 +1,9 @@
-import DesignSystem
 import Foundation
-import SwiftUI
 import Testing
 
 @testable import Overlay
 
-struct PlacementTests {
+struct NotchGeometryTests {
   /// A left Dock 100 pt wide and a menu bar shrink the work area.
   static let screen = ScreenGeometry(
     frame: CGRect(x: 0, y: 0, width: 1540, height: 925),
@@ -17,57 +15,6 @@ struct PlacementTests {
     auxiliaryTopLeft: CGRect(x: 0, y: 1085, width: 771.5, height: 32),
     auxiliaryTopRight: CGRect(x: 956.5, y: 1085, width: 771.5, height: 32))
 
-  @Test func `missing or unknown values fall back to the notch and the bottom edge`() throws {
-    let defaults = try #require(UserDefaults(suiteName: "PlacementTests-\(UUID())"))
-    #expect(OverlayPreference.stored(in: defaults) == OverlayPreference(style: .notch, edge: .bottom))
-    defaults.set("sideways", forKey: IslandEdge.defaultsKey)
-    defaults.set("floating", forKey: OverlayStyle.defaultsKey)
-    #expect(OverlayPreference.stored(in: defaults) == OverlayPreference(style: .notch, edge: .bottom))
-    defaults.set("islandTop", forKey: IslandEdge.defaultsKey)
-    defaults.set("island", forKey: OverlayStyle.defaultsKey)
-    #expect(OverlayPreference.stored(in: defaults) == OverlayPreference(style: .island, edge: .top))
-  }
-
-  @Test(arguments: IslandEdge.allCases)
-  func `the notch style uses the notch, or the top island without one`(edge: IslandEdge) throws {
-    let preference = OverlayPreference(style: .notch, edge: edge)
-    #expect(preference.placement(on: Self.notched) == .notch(try #require(NotchGeometry(Self.notched))))
-    #expect(preference.placement(on: Self.screen) == .island(.top))
-  }
-
-  @Test(arguments: IslandEdge.allCases)
-  func `the island style uses its edge on every display`(edge: IslandEdge) {
-    let preference = OverlayPreference(style: .island, edge: edge)
-    #expect(preference.placement(on: Self.notched) == .island(edge))
-    #expect(preference.placement(on: Self.screen) == .island(edge))
-  }
-
-  @Test func `the bottom island sits 24 points above the work area, centred`() {
-    let frame = OverlayPlacement.island(.bottom).panelFrame(on: Self.screen)
-    #expect(frame.minY == Self.screen.visibleFrame.minY + 24)
-    #expect(frame.midX == Self.screen.visibleFrame.midX)
-    #expect(frame.size == OverlayMetrics.canvas)
-    #expect(OverlayPlacement.island(.bottom).anchor == .bottom)
-  }
-
-  @Test func `the top island sits 8 points below the menu bar, centred on the screen`() {
-    let frame = OverlayPlacement.island(.top).panelFrame(on: Self.screen)
-    #expect(frame.maxY == Self.screen.visibleFrame.maxY - 8)
-    #expect(frame.midX == Self.screen.frame.midX)
-    #expect(OverlayPlacement.island(.top).anchor == .top)
-  }
-
-  @Test func `the notch canvas hangs from the screen top, centred on the camera`() throws {
-    let placement = OverlayPlacement.notch(try #require(NotchGeometry(Self.notched)))
-    let frame = placement.panelFrame(on: Self.notched)
-    #expect(frame.maxY == Self.notched.frame.maxY)
-    #expect(frame.midX == 864)
-    #expect(frame.size == OverlayMetrics.canvas)
-    #expect(placement.anchor == .top)
-  }
-}
-
-struct NotchGeometryTests {
   static func screen(
     x: CGFloat = 0, width: CGFloat, height: CGFloat, notch: CGFloat, notchMidX: CGFloat? = nil,
     safeTop: CGFloat = 32, auxiliaryOrigin: CGFloat? = nil
@@ -86,7 +33,7 @@ struct NotchGeometryTests {
   }
 
   @Test func `the 16 inch notch is 185 by 32, centred at 864`() throws {
-    let notch = try #require(NotchGeometry(PlacementTests.notched))
+    let notch = try #require(NotchGeometry(Self.notched))
     #expect(notch.size == CGSize(width: 185, height: 32))
     #expect(notch.midX == 864)
     #expect(notch.hiddenSize == CGSize(width: 181, height: 30))
@@ -117,6 +64,6 @@ struct NotchGeometryTests {
     var screen = Self.screen(width: 1512, height: 982, notch: 185)
     screen.auxiliaryTopRight = nil
     #expect(NotchGeometry(screen) == nil)
-    #expect(NotchGeometry(PlacementTests.screen) == nil)
+    #expect(NotchGeometry(Self.screen) == nil)
   }
 }

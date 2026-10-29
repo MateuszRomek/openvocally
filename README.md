@@ -28,7 +28,7 @@ Hold a shortcut, speak and release. OpenVocally transcribes your speech on your 
 - **Push to talk or toggle.** Hold ⌥Space to dictate, or press ⌥D to start and again to stop. Escape cancels. Any shortcut can be a key chord. Push to talk can also be a single held key, and toggle a double tap of a modifier.
 - **Local speech models.** Choose Parakeet v3, Parakeet Ultra or Whisper Turbo. The Parakeet models detect the language on their own across 25 languages and add punctuation and capitals.
 - **Pastes where you type.** The text lands in the frontmost app, and your clipboard is restored afterwards. ⌃⌥V pastes the last transcript again.
-- **A small recording indicator.** The overlay sits in the notch, or floats as an island at the top or bottom of the screen.
+- **A small recording indicator.** It grows out of the notch, or out of the top edge of a display without one.
 - **History and stats.** Transcripts keeps every dictation, so you can copy or delete one later. Home shows your word counts, activity over time and the apps you dictate into most. You can delete transcripts automatically after 7, 30 or 90 days.
 - **A native Mac app.** It is written in Swift and SwiftUI, with light and dark appearance, a menu bar item you can hide, and sound cues you can turn off.
 

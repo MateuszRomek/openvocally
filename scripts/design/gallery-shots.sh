@@ -10,7 +10,7 @@ the background on the Design Gallery once per section and captures only the gall
 to .build/design-gallery/<section>.png. Each shot shows the Light, Dark and both Increase
 Contrast columns. Posts no clicks or keys and never takes focus. Captures the window itself,
 so other windows on top don't matter. Sections default to type spacing radius color
-surface overlay notch notch-reduce-motion components sidebar panels motion language. The notch
+surface notch notch-reduce-motion components sidebar panels motion language. The notch
 sections open the window over the main display's visible area and shrink to fit it. Needs
 Screen Recording for the terminal.
 HELP
@@ -23,7 +23,7 @@ if [[ "${DEBUG_APP_LOCK_HELD:-}" != 1 ]]; then
 fi
 
 sections=("$@")
-((${#sections[@]})) || sections=(type spacing radius color surface overlay notch notch-reduce-motion components sidebar panels motion language)
+((${#sections[@]})) || sections=(type spacing radius color surface notch notch-reduce-motion components sidebar panels motion language)
 out="$PWD/.build/design-gallery"
 mkdir -p "$out"
 app="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally Dev.app"

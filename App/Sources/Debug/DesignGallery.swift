@@ -49,21 +49,12 @@
     private var content: some View {
       VStack(alignment: .leading, spacing: Space.xxl.points) {
         SystemSettingsNote()
-        let columns = sections.filter { ![.motion, .overlay, .notch, .notchReduceMotion].contains($0) }
+        let columns = sections.filter { ![.motion, .notch, .notchReduceMotion].contains($0) }
         if !columns.isEmpty {
           HStack(alignment: .top, spacing: 0) {
             ForEach(Self.appearances, id: \.title) { appearance in
               AppearanceHost(appearance: appearance.name) {
                 TokenColumn(title: appearance.title, sections: columns)
-              }
-            }
-          }
-        }
-        if sections.contains(.overlay) {
-          HStack(alignment: .top, spacing: 0) {
-            ForEach(Self.appearances, id: \.title) { appearance in
-              AppearanceHost(appearance: appearance.name) {
-                OverlayColumn(title: appearance.title)
               }
             }
           }
@@ -93,7 +84,6 @@
     case radius
     case color
     case surface
-    case overlay
     case notch
     case notchReduceMotion = "notch-reduce-motion"
     case components
@@ -170,7 +160,7 @@
           case .components: ComponentsSection()
           case .sidebar: SidebarSection()
           case .panels: PanelsSection()
-          case .motion, .overlay, .notch, .notchReduceMotion: EmptyView()
+          case .motion, .notch, .notchReduceMotion: EmptyView()
           case .language: LanguageSection()
           }
         }
@@ -290,8 +280,8 @@
         Text("Paste ⌘V")
           .textStyle(.overlayLabel)
           .foregroundStyle(.token(.onAccent))
-          .padding(.horizontal, OverlayMetrics.labelInset)
-          .frame(height: OverlayMetrics.islandHeight)
+          .padding(.horizontal, Space.m)
+          .padding(.vertical, Space.s)
           .background(.token(.accent), in: Capsule())
         HStack(spacing: Space.m.points) {
           Text("primary").foregroundStyle(.primary)
@@ -329,14 +319,14 @@
         VStack(alignment: .leading, spacing: Space.s.points) {
           Label("Control", systemImage: "slider.horizontal.3")
             .textStyle(.overlayLabel)
-            .padding(.horizontal, OverlayMetrics.labelInset)
-            .frame(height: OverlayMetrics.islandHeight)
+            .padding(.horizontal, Space.m)
+            .padding(.vertical, Space.s)
             .surface(.control, in: Capsule())
           Label("Recording", systemImage: "mic.fill")
             .textStyle(.overlayLabel)
-            .padding(.horizontal, OverlayMetrics.labelInset)
-            .frame(height: OverlayMetrics.islandHeight)
-            .surface(.island, in: Capsule())
+            .padding(.horizontal, Space.m)
+            .padding(.vertical, Space.s)
+            .surface(.notch, in: Capsule())
         }
       }
     }
@@ -445,7 +435,7 @@
         GalleryConfetti()
         SectionHeader(title: "Countdown bar", detail: "Restarts a 10 s window each time the gallery opens")
         CountdownBar(until: .now.addingTimeInterval(10), total: .seconds(10))
-          .frame(width: OverlayMetrics.cardMaxWidth / 2)
+          .frame(width: 190)
       }
     }
 
@@ -502,10 +492,11 @@
           }
         }
         SectionHeader(title: "Setting row", detail: "The control centers against both lines")
-        SettingRow("Overlay", subtitle: "Displays without a notch show the island at the top.") {
-          Picker("Overlay", selection: .constant(0)) {
-            Text("Notch").tag(0)
-            Text("Island").tag(1)
+        SettingRow("Theme", subtitle: "Follows the system unless you pick one.") {
+          Picker("Theme", selection: .constant(0)) {
+            Text("System").tag(0)
+            Text("Light").tag(1)
+            Text("Dark").tag(2)
           }
           .pickerStyle(.segmented)
           .labelsHidden()
@@ -599,12 +590,6 @@
 
     private var purpose: String {
       switch motion {
-      case .overlayExpand: "Overlay appears. Glyph shows in the first frame."
-      case .overlayGrow: "Pill on screen grows into an alert, with a little bounce."
-      case .overlayCollapse: "Overlay shrinks. No overshoot."
-      case .overlayHide: "Overlay leaves, faster than it came."
-      case .overlayContentSwap: "Overlay content changes between phases."
-      case .overlayMeter: "Overlay meter bars follow the microphone. Frozen under Reduce Motion."
       case .grow: "The notch appears, or grows for a result."
       case .shrink: "The notch shrinks or leaves. No overshoot."
       case .keyboard: "The notch answers a key press. Instant under Reduce Motion."
@@ -623,16 +608,17 @@
     }
   }
 
-  /// Every overlay state through the real island views, without a panel. Cancel is absent
-  /// because it shows nothing.
-  private struct OverlayColumn: View {
+  /// Every dictation scene through the dictation notch's view at the simulated notch's size, in
+  /// two columns so all of them fit the gallery window. The Reduce Motion variant is its own
+  /// section, because both side by side are wider than any display.
+  private struct NotchColumn: View {
     let title: String
+    let reduceMotion: Bool
 
     private struct Sample: Identifiable {
       let id: String
-      let slots: [(OverlaySource, OverlayActivity)]
-      var placement = OverlayPlacement.island(.bottom)
-      var bands: [Float] = []
+      let phases: [DictationPhase]
+      var waitingForMicrophone = false
     }
 
     private static let bands: [Float] = (0..<20).map { band in
@@ -663,102 +649,9 @@
       ("paste runtime error", .failed(.pasteRuntimeError)),
     ]
 
-    private static let wakingMicrophone = OverlayActivity(
-      glyph: nil, status: "Connecting", body: .compact(.status))
-
-    private static let recording = OverlayActivity(
-      glyph: nil, status: "Recording", body: .compact(.bars(.live)))
-
-    private static let samples: [Sample] =
-      phases.compactMap { name, phase in
-        OverlayActivity(dictation: phase).map { activity in
-          Sample(id: name, slots: [(.dictation, activity)], bands: bands)
-        }
-      } + [
-        Sample(id: "connecting bluetooth mic", slots: [(.dictation, wakingMicrophone)], bands: bands),
-        Sample(id: "top placement", slots: [(.dictation, recording)], placement: .island(.top), bands: bands),
-        Sample(
-          id: "agent alert",
-          slots: [
-            (
-              .agent,
-              OverlayActivity(
-                glyph: .agent, status: "Reply drafted", body: .alert(OverlayAlert("Reply drafted")))
-            )
-          ]),
-        Sample(
-          id: "card",
-          slots: [
-            (
-              .agent,
-              OverlayActivity(
-                glyph: .agent, status: "Review",
-                body: .card(OverlayCard(title: "Reply drafted", detail: "Three paragraphs, ready to review")))
-            )
-          ]),
-      ]
-
-    private static let notchSamples: [Sample] = samples.filter { $0.placement == .island(.bottom) }
-      .map { sample in
-        Sample(
-          id: "notch \(sample.id)", slots: sample.slots, placement: .notch(.simulated), bands: sample.bands)
-      }
-
-    var body: some View {
-      VStack(alignment: .leading, spacing: Space.m.points) {
-        Text(title).textStyle(.title3).fontWeight(.semibold)
-        SectionTitle(text: "Overlay")
-        ForEach(Self.samples) { sample in
-          VStack(alignment: .leading, spacing: Space.xs.points) {
-            Text(sample.id).textStyle(.caption).foregroundStyle(.secondary)
-            OverlayPreview(sample.slots, placement: sample.placement, bands: sample.bands)
-              .frame(
-                width: 460, alignment: Alignment(horizontal: .center, vertical: .center)
-              )
-              .padding(.vertical, Space.xs)
-              .overlay(alignment: sample.placement == .island(.top) ? .top : .bottom) {
-                Rectangle().fill(.token(.separator)).frame(height: 1)
-              }
-          }
-        }
-        SectionTitle(text: "Notch")
-        ForEach(Self.notchSamples) { sample in
-          VStack(alignment: .leading, spacing: Space.xs.points) {
-            Text(sample.id).textStyle(.caption).foregroundStyle(.secondary)
-            OverlayPreview(sample.slots, placement: sample.placement, bands: sample.bands)
-              .frame(width: 460, alignment: .top)
-              .background(alignment: .top) {
-                OverlayPreview([], placement: sample.placement)
-              }
-          }
-        }
-      }
-      .padding(Space.xl)
-      .frame(width: 500, alignment: .topLeading)
-      .background(.token(.windowBackground))
-    }
-  }
-
-  /// Every dictation scene through the dictation notch's view at the simulated notch's size, in
-  /// two columns so all of them fit the gallery window. The Reduce Motion variant is its own
-  /// section, because both side by side are wider than any display.
-  private struct NotchColumn: View {
-    let title: String
-    let reduceMotion: Bool
-
-    private struct Sample: Identifiable {
-      let id: String
-      let phases: [DictationPhase]
-      var waitingForMicrophone = false
-    }
-
-    private static let bands: [Float] = (0..<20).map { band in
-      Float(max(0.05, 0.9 - abs(Double(band) - 9.5) / 11))
-    }
-
     private static let samples: [Sample] =
       [Sample(id: "connecting", phases: [.starting(.pushToTalk)], waitingForMicrophone: true)]
-      + OverlayColumn.phases.map { name, phase in
+      + Self.phases.map { name, phase in
         Sample(id: name, phases: [.recording(.toggle), phase])
       }
 

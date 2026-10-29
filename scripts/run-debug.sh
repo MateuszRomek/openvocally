@@ -14,7 +14,7 @@ Create the identity with scripts/setup-signing.sh.
 RUN_DEBUG_BACKGROUND=1 opens the app without bringing it to the front.
 
 Arguments are passed to the app, for example
-  scripts/run-debug.sh -overlayDemo YES -overlayPlacement islandTop
+  scripts/run-debug.sh -overlayDemo YES -overlayDemoScenario paste
 EOF
 }
 

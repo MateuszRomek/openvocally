@@ -139,13 +139,12 @@ Use `.surface(.card, in: Radius.card.shape)` or `.surface(.control, in: Capsule(
 | Token | Renders as | Use it for | Why |
 | --- | --- | --- | --- |
 | `control` | Liquid Glass (`.regular`), `.regularMaterial` before macOS 26 | Custom controls | The macOS 26 HIG keeps Liquid Glass in the control and navigation layer (rule 11). Standard controls, the sidebar and the toolbar already get it from the system. |
-| `island` | Opaque, white in light mode and black in dark, with a hairline edge and a soft shadow | The island overlay and the bottom pill | The island follows the theme. The shadow keeps it visible on a window of the same color. |
 | `notch` | Always black, white content | The notch overlay | The notch is hardware and always black, so anything that grows out of it is black too, like Apple's Dynamic Island. |
 | `card` | Regular material, plus a separator outline under Increase Contrast | Stat cards, chart panels, grouped lists | The HIG asks for standard materials in the content layer (rule 11). Liquid Glass reception is mixed for legibility, so content stays off it (section 3). |
 
 Never put glass on content. The lint rejects `glassEffect` and named materials outside the module, so `.surface` is the only way in.
 
-Floating rounded panels are for tools, not content (rule 12). `control` and `card` fall back to an opaque fill under Reduce Transparency, which the system applies. `island` and `notch` are already opaque.
+Floating rounded panels are for tools, not content (rule 12). `control` and `card` fall back to an opaque fill under Reduce Transparency, which the system applies. `notch` is already opaque.
 
 ## Window background
 
@@ -160,16 +159,10 @@ The gallery can't show it, because its columns host views inside one window. Che
 
 ## Motion
 
-Use `.motion(.overlayContentSwap, value: phase)`. It plays the token's Reduce Motion variant when that setting is on. For an explicit change, use `withAnimation(Motion.windowUnfold.resolved(reduceMotion:))`.
+Use `.motion(.content, value: phase)`. It plays the token's Reduce Motion variant when that setting is on. For an explicit change, use `withAnimation(Motion.windowUnfold.resolved(reduceMotion:))`.
 
 | Token | Animation | Reduce Motion | Use it for |
 | --- | --- | --- | --- |
-| `overlayExpand` | spring, response 0.42, damping 0.8 | 0.2 s crossfade | The overlay appears, including on a key press. The glyph shows at full opacity in the first frame, to meet the 100 ms budget. |
-| `overlayGrow` | spring, response 0.5, damping 0.68 | 0.2 s crossfade | The pill already on screen grows to a bigger level. About 5% overshoot, so the stretch reads as one pill. |
-| `overlayCollapse` | spring, response 0.45, damping 1.0 | 0.2 s crossfade | The overlay shrinks to a smaller level. No overshoot, so the shape never dips inside the notch. |
-| `overlayHide` | spring, response 0.22, damping 1.0 | 0.2 s crossfade | The overlay leaves. Exits are shorter than entrances. |
-| `overlayContentSwap` | `.smooth(duration: 0.3)` with `.transition(.blurReplace)` | 0.2 s crossfade | A change within one overlay level. The host drives the shape and the swapped content (`.blurReplace`) on this one curve, so the text never outruns the edge |
-| `overlayMeter` | linear 0.05 s | none (static) | The overlay's live meter bars between 50 ms level ticks. Decoration. |
 | `grow` | spring, response 0.3, damping 0.9 | 0.2 s crossfade | The dictation notch appears from hidden, whatever the cause, or grows to a bigger footprint for anything but a key press, such as a notice arriving. An entry is instant under Reduce Motion. |
 | `shrink` | spring, response 0.25, damping 1.0 | 0.2 s crossfade | The dictation notch shrinks or leaves. No overshoot, so the shape never dips inside the notch. |
 | `keyboard` | spring, response 0.15, damping 1.0 | none (instant) | The dictation notch, already on screen, resizes because of a key press. A key's feedback never fades in, so under Reduce Motion it is instant, and the recording mark is on screen in the first frame. |
@@ -185,43 +178,32 @@ Use `.motion(.overlayContentSwap, value: phase)`. It plays the token's Reduce Mo
 | `onboardingStep` | spring, response 0.42, damping 0.9 | 0.2 s crossfade | An onboarding step entering from the trailing side by `Motion.stepTravel` (20 pt) with a blur, through `Motion.stepTransition(_:reduceMotion:)`; going Back mirrors it (`StepDirection.backward`, from the leading side); also step dots and in-step swaps such as "You're all set" (`.blurReplace`). Interruptible (apple-design). |
 | `onboardingExit` | ease-out curve (0.23, 1, 0.32, 1), 0.18 s | 0.15 s fade | The onboarding step leaving (to the leading side, or the trailing side going Back), faster than the next one enters (emil-design-eng, asymmetric timing). |
 
-The overlay values are a spring tuned in a throwaway motion lab. They match boring.notch at commit `e2654ee`. Under Reduce Motion, views that move or resize switch to an opacity transition, and the meter bars freeze. A test fails if a token other than the decoration and `keyboard` has no Reduce Motion variant.
+Under Reduce Motion, views that move or resize switch to an opacity transition, and the meter bars freeze. A test fails if a token other than the decoration and `keyboard` has no Reduce Motion variant.
 
 Window motion follows the research rules. Animate only to keep the user's place (rule 13). Keep it short and interruptible, and skip it on frequent actions (rule 14). Nothing animates on a keyboard shortcut except the overlay, which is the shortcut's feedback.
 
 ## The overlay
 
-`OverlayMetrics`, in the `Overlay` module, holds the overlay geometry from the lab. The notch style draws on `Surface.notch`, always black. The island style draws on `Surface.island`, which follows light and dark.
+`OverlayMetrics`, in the `Overlay` module, holds the notch geometry. The notch draws on `Surface.notch`, always black.
 
-The `Overlay` module draws activities. The island is one persistent pill: the shape is drawn once and only the content swaps inside it, on the one curve the host picks for the change. A compact island is 36 pt tall and at least 120 pt wide, holding bars or one status word; recording, transcribing and pasting draw bars alone. An alert is one short line from a fixed copy table. Manual paste adds a second row, a `CountdownBar`. Glyphs appear only for success and errors. Only the highest-priority source shows; a lower one waits. The island grows away from the screen edge it is anchored to, and it appears under `overlayExpand`, grows under `overlayGrow`, shrinks under `overlayCollapse` and leaves under `overlayHide`. The Design Gallery's `overlay` section renders every state through `OverlayPreview`.
-
-The dictation notch (`NotchFrameView`, Debug builds behind `FEATURE_NOTCH`) draws one frame from `NotchCore`: a scene and the cue for moving into it. Its animations are scoped by structure, never by `withAnimation` or `withTransaction` (`scripts/check-overlay-motion.sh` rejects both under `Sources/Overlay`). The shape's size comes from the footprint alone (hidden, strip, notice) and animates with `.animation(_:value:)` keyed on the footprint, on the cue's token: `appear` → `grow`, `grow` → `grow`, `shrink` → `shrink`, `keyboard` → `keyboard`, `content` → `content` (`MotionCue+Motion.swift`). Any change from hidden is `appear`, so the entry is visible even on a key press; a key press on a notch already on screen is `keyboard`. Content animates on `content`, keyed on the strip lead: new content swaps in with `.blurReplace`, and a change that keeps the content, such as the bars going from live to sweep, interpolates the tint and crossfades the bars. A change within one footprint never moves the shape. Content that arrives with a key press or on `appear` is inserted without a transition, at full opacity in the first frame. Under Reduce Motion the shape and content crossfade, and a key press and `appear` are instant. On a display without a notch it draws at the simulated notch's size on the top edge, and hidden draws nothing. The Design Gallery's `notch` section renders every scene through `NotchFramePreview`, and `notch-reduce-motion` renders their Reduce Motion variants.
+The dictation notch (`NotchFrameView`), the only overlay, draws one frame from `NotchCore`: a scene and the cue for moving into it. Its animations are scoped by structure, never by `withAnimation` or `withTransaction` (`scripts/check-overlay-motion.sh` rejects both under `Sources/Overlay`). The shape's size comes from the footprint alone (hidden, strip, notice) and animates with `.animation(_:value:)` keyed on the footprint, on the cue's token: `appear` → `grow`, `grow` → `grow`, `shrink` → `shrink`, `keyboard` → `keyboard`, `content` → `content` (`MotionCue+Motion.swift`). Any change from hidden is `appear`, so the entry is visible even on a key press; a key press on a notch already on screen is `keyboard`. Content animates on `content`, keyed on the strip lead: new content swaps in with `.blurReplace`, and a change that keeps the content, such as the bars going from live to sweep, interpolates the tint and crossfades the bars. A change within one footprint never moves the shape. Content that arrives with a key press or on `appear` is inserted without a transition, at full opacity in the first frame. Under Reduce Motion the shape and content crossfade, and a key press and `appear` are instant. On a display without a notch it draws at the simulated notch's size on the top edge, and hidden draws nothing. The Design Gallery's `notch` section renders every scene through `NotchFramePreview`, and `notch-reduce-motion` renders their Reduce Motion variants.
 
 | Value | pt | Meaning |
 | --- | --- | --- |
-| `islandHeight` | 36 | Island at the compact level. The bottom pill uses it today. |
-| `islandMinWidth` | 120 | The narrowest compact island, so recording, transcribing and Pasted share one base width |
-| `islandAlertRadius` | 22 | Island at the alert level |
-| `islandCardRadius` | 26 | Island at the card level |
 | `notchIdleShrink` | 4 by 2 | The idle shape is this much smaller than the hardware notch, so it never shows an edge. |
 | `notchWing` | 64 | Width added on each side of the notch at the compact level |
 | `notchWingInset` | 10 | Gap between the camera edge and the content in each wing |
-| `notchDropInset` | 12 | Side and bottom inset of an alert or card below the camera |
+| `notchDropInset` | 12 | Side inset of a notice below the camera |
 | `notchSimulated` | 185 by 32 | The notch the Design Gallery draws on a Mac without one; on a display without a camera notch the width, at the menu bar's height |
 | `notchHiddenRadii` | 0 top, 12 bottom | Notch at the hidden level, inside the hardware notch |
 | `notchCompactRadii` | 6 top, 12 bottom | Notch at the compact level |
 | `notchAlertRadii` | 10 top, 20 bottom | Notch at the alert level |
-| `notchCardRadii` | 14 top, 26 bottom | Notch at the card level |
 | `glyphSize` | 14 | SF Symbol frame |
-| `labelInset` | 14 | Side inset of the island's content |
-| `cardMaxWidth` | 380 | The widest a card grows before its text wraps |
-| `appearScale` | 0.9 | The island appears from this scale, anchored at the screen edge, with no fade |
-| `canvas` | 600 by 180 | The fixed panel the island animates inside, one per display |
-| `bottomInset`, `topInset` | 24, 8 | The panel's distance from the work area's bottom or the menu bar |
+| `canvas` | 600 by 180 | The fixed panel the notch animates inside, one per display |
 | `barCount`, `barWidth`, `barSpacing` | 16, 2, 2 | The meter bars |
 | `barMinHeight`, `barMaxHeight` | 3, 16 | A silent and a full bar |
 
-The notch style draws the same scene through the same motion tokens. One shape stays mounted at every level: hidden, it sits inside the hardware notch, so appearing and hiding grow out of and back into the camera housing. Compact content sits beside the camera in two equal wings, at least `notchWing` wide: a mic or result glyph on the left, the meter or status word on the right. Alerts and cards drop below the camera. Displays without a notch show the island at the top; only the island style uses the chosen edge.
+One shape stays mounted at every level: hidden, it sits inside the hardware notch, so appearing and hiding grow out of and back into the camera housing. Strip content sits beside the camera in two equal wings: a mic or result glyph on the left, the meter or status word on the right. Notices drop below the camera.
 
 The notch size itself comes from `NSScreen` (`safeAreaInsets` and the auxiliary top areas), never from a constant.
 

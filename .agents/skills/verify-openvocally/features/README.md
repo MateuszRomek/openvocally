@@ -29,7 +29,7 @@ Each feature file starts with an H1 title and one paragraph on the user-visible 
 ## Features
 
 - [Dictation](./dictation.md) covers hold and toggle dictation from press to pasted text, the latency budgets and the history save.
-- [Overlay](./overlay.md) covers the recording overlay's states, styles, placements and full-screen apps.
+- [Overlay](./overlay.md) covers the dictation notch over full-screen apps.
 - [Notch](./notch.md) covers the Debug-only dictation notch: every scene, appearance and Reduce Motion, on every display.
 - [Transcripts](./transcripts.md) covers Home and Transcripts on a large history: open, scroll, select, sidebar and minimum width.
 - [Onboarding](./onboarding.md) covers each first-run step.

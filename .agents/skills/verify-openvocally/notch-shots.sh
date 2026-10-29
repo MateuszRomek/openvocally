@@ -8,7 +8,7 @@ Usage: .agents/skills/verify-openvocally/notch-shots.sh [variant ...]
 Captures the real dictation notch panel on every connected display for every scene, and
 stitches each display and variant into one labelled contact sheet.
 
-Holds the Debug app lock, builds the Debug app (FEATURE_NOTCH), and opens it in the background
+Holds the Debug app lock, builds the Debug app, and opens it in the background
 once per variant with -notchProbe. For each display it aims the probe pointer at the display's
 top centre, walks the scenes (hidden, connecting, starting, recording, stopping, transcribing,
 pasting, complete, manual-paste and one failed-<reason> per failure) and captures only the

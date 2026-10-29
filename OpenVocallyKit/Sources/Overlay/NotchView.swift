@@ -1,100 +1,22 @@
 import DesignSystem
 import SwiftUI
 
-struct NotchStage: View {
-  let scene: OverlayScene
-  let notch: NotchGeometry
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+/// What makes two activities different content, so the notch swaps its content only when
+/// this changes.
+struct OverlayKey: Hashable {
+  let level: OverlayLevel
+  let glyph: OverlayGlyph?
+  let content: String
 
-  var body: some View {
-    ZStack(alignment: .top) {
-      if reduceMotion {
-        if let primary = scene.primary {
-          NotchBody(activity: primary, notch: notch)
-            .id(OverlayKey(primary))
-            .transition(.opacity)
-        }
-      } else {
-        NotchBody(activity: scene.primary, notch: notch)
+  init(_ activity: OverlayActivity) {
+    level = activity.level
+    glyph = activity.glyph
+    content =
+      switch activity.body {
+      case .compact(.status): activity.status.text
+      case .compact(.bars): "bars"
+      case .alert(let alert): alert.message
       }
-    }
-    .environment(\.colorScheme, .dark)
-  }
-}
-
-struct NotchBody: View {
-  let activity: OverlayActivity?
-  let notch: NotchGeometry
-
-  var body: some View {
-    let shape = NotchShape(radii: radii, minimumSize: notch.hiddenSize)
-    ZStack(alignment: .top) {
-      if let activity {
-        NotchContent(activity: activity, notch: notch)
-          .transition(.asymmetric(insertion: .identity, removal: .opacity))
-      }
-    }
-    .frame(minWidth: minSize.width, minHeight: minSize.height, alignment: .top)
-    .clipShape(shape)
-    .background(Color.clear.surface(.notch, in: shape))
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(activity?.accessibilityLabel ?? "")
-    .accessibilityHidden(activity == nil)
-  }
-
-  private var minSize: CGSize {
-    guard activity != nil else { return notch.hiddenSize }
-    return CGSize(width: notch.size.width + 2 * OverlayMetrics.notchWing, height: notch.size.height)
-  }
-
-  private var radii: NotchRadii {
-    switch activity?.level ?? .hidden {
-    case .hidden: OverlayMetrics.notchHiddenRadii
-    case .compact: OverlayMetrics.notchCompactRadii
-    case .alert: OverlayMetrics.notchAlertRadii
-    case .card: OverlayMetrics.notchCardRadii
-    }
-  }
-}
-
-private struct NotchContent: View {
-  let activity: OverlayActivity
-  let notch: NotchGeometry
-
-  var body: some View {
-    switch activity.body {
-    case .compact(let trailing):
-      NotchRowLayout(notch: notch) {
-        ZStack { if let mark = LeadingMark(activity) { LeadingMarkView(mark: mark) } }
-        ZStack { TrailingSlot(trailing: trailing, status: activity.status) }
-      }
-      .transition(.blurReplace)
-    case .alert(let alert):
-      below {
-        HStack(spacing: Space.s.points) {
-          if let glyph = activity.glyph { GlyphSlot(glyph: glyph) }
-          AlertBlock(alert: alert)
-        }
-        .id(alert.message)
-      }
-    case .card(let card):
-      below {
-        HStack(alignment: .top, spacing: Space.s.points) {
-          if let glyph = activity.glyph { GlyphSlot(glyph: glyph) }
-          CardBlock(card: card)
-        }
-      }
-    }
-  }
-
-  private func below(@ViewBuilder _ content: () -> some View) -> some View {
-    VStack(spacing: 0) {
-      Color.clear.frame(width: notch.size.width, height: notch.size.height)
-      content()
-        .padding(.horizontal, OverlayMetrics.notchDropInset)
-        .padding(.bottom, OverlayMetrics.notchDropInset)
-    }
-    .transition(.blurReplace)
   }
 }
 
@@ -110,7 +32,7 @@ enum LeadingMark: Hashable {
     switch activity.body {
     case .compact(.bars(let mode)): self = .mic(listening: mode == .live)
     case .compact(.status): self = .mic(listening: false)
-    case .alert, .card: return nil
+    case .alert: return nil
     }
   }
 }

@@ -37,7 +37,7 @@ check: lint test build
 run:
 	./scripts/run-debug.sh
 
-# Debug build that shows the first-run onboarding again; STEP=overlay opens on one step.
+# Debug build that shows the first-run onboarding again; STEP=shortcut opens on one step.
 onboarding:
 	@if [ -n "$(FRESH)" ]; then \
 		rm -rf .build/onboarding-models; \
@@ -61,10 +61,9 @@ smoke-idle:
 diagnostics-export:
 	./scripts/diagnostics-export.sh
 
-# Debug build that loops the overlay through every state; STYLE=notch for the notch,
-# PLACEMENT=islandTop for the top island.
+# Debug build that loops the notch through every state.
 overlay-demo:
-	./scripts/run-debug.sh -overlayDemo YES -overlayStyle $${STYLE:-notch} -overlayPlacement $${PLACEMENT:-islandBottom}
+	./scripts/run-debug.sh -overlayDemo YES
 
 install:
 	./scripts/install.sh

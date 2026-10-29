@@ -1,16 +1,13 @@
 import Foundation
 
-/// Ordered so a move up is a grow and a move down is a shrink. `hidden` is never stored: no
-/// activity means hidden.
-public enum OverlayLevel: Int, Comparable, Sendable {
-  case hidden, compact, alert, card
-
-  public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
+/// The strip beside the notch, or a notice dropped below it.
+public enum OverlayLevel: Sendable {
+  case compact, alert
 }
 
 /// `status` is always present, so VoiceOver always has a label. No glyph while the bars
 /// carry the state.
-public struct OverlayActivity: Sendable, Equatable {
+struct OverlayActivity: Sendable, Equatable {
   var glyph: OverlayGlyph?
   public var status: StatusWord
   public var body: Body
@@ -18,8 +15,6 @@ public struct OverlayActivity: Sendable, Equatable {
   public enum Body: Sendable, Equatable {
     case compact(Trailing)
     case alert(OverlayAlert)
-    /// Reserved for agent review. Click-through until actions land with the agent.
-    case card(OverlayCard)
   }
 
   public enum Trailing: Sendable, Equatable {
@@ -38,7 +33,6 @@ public struct OverlayActivity: Sendable, Equatable {
     switch body {
     case .compact: .compact
     case .alert: .alert
-    case .card: .card
     }
   }
 }
@@ -48,11 +42,10 @@ public enum BarsMode: Sendable, Equatable {
   case pulse, live, sweep
 }
 
-/// Semantic glyphs, so every style draws the same meaning. A new activity kind adds a case here.
+/// Semantic glyphs, so the strip and the notice draw the same meaning.
 public enum OverlayGlyph: Sendable, Equatable {
   case success
   case attention
-  case agent
 }
 
 /// The only text allowed at compact. `StaticString` cannot be interpolated, so
@@ -96,25 +89,12 @@ public struct Countdown: Sendable, Equatable {
   }
 }
 
-/// Runtime text, unlike `StatusWord` and `OverlayAlert`. Only the agent builds cards, and
-/// dictation never does, so transcript text stays out of the overlay.
-public struct OverlayCard: Sendable, Equatable {
-  public let title: String
-  public let detail: String?
-
-  public init(title: String, detail: String? = nil) {
-    self.title = title
-    self.detail = detail
-  }
-}
-
 extension OverlayActivity {
-  /// What VoiceOver reads: the status word, the alert with its keys, or the card's text.
+  /// What VoiceOver reads: the status word, or the alert with its keys.
   public var accessibilityLabel: String {
     switch body {
     case .compact: status.text
     case .alert(let alert): alert.accessibilityLabel
-    case .card(let card): [card.title, card.detail].compactMap(\.self).joined(separator: ", ")
     }
   }
 }

@@ -8,7 +8,7 @@ Usage: scripts/onboarding/shots.sh [step ...]
 Holds the Debug app lock (scripts/with-debug-app.sh), builds the Debug app, then opens it in the background on each onboarding step and captures
 only its window to .build/onboarding-shots/<step>.png. Posts no clicks or keys and never takes
 focus. Captures the window itself, so other windows on top don't matter. Steps default to welcome permissions
-overlay shortcut model tryIt. Needs Screen Recording for the terminal.
+shortcut model tryIt. Needs Screen Recording for the terminal.
 HELP
   exit 0
 fi
@@ -18,7 +18,7 @@ if [[ "${DEBUG_APP_LOCK_HELD:-}" != 1 ]]; then
   exec scripts/with-debug-app.sh scripts/onboarding/shots.sh "$@"
 fi
 steps=("$@")
-((${#steps[@]})) || steps=(welcome permissions overlay shortcut model tryIt)
+((${#steps[@]})) || steps=(welcome permissions shortcut model tryIt)
 out="$PWD/.build/onboarding-shots"
 mkdir -p "$out"
 app="$PWD/.build/DerivedData/Build/Products/Debug/OpenVocally Dev.app"
