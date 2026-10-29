@@ -10,7 +10,7 @@ public enum OverlayLevel: Int, Comparable, Sendable {
 
 /// `status` is always present, so VoiceOver always has a label. No glyph while the bars
 /// carry the state.
-public struct OverlayActivity: Sendable, Equatable {
+struct OverlayActivity: Sendable, Equatable {
   var glyph: OverlayGlyph?
   public var status: StatusWord
   public var body: Body

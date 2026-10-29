@@ -1,10 +1,10 @@
 # Onboarding
 
-On first launch the user walks through welcome, permissions, overlay choice, shortcut, model download and a Try it step that listens for a real hold.
+On first launch the user walks through welcome, permissions, shortcut, model download and a Try it step that listens for a real hold.
 
 ## Sub-features
 
-- `onboarding-steps` each step renders: welcome, permissions, overlay, shortcut, model, tryIt.
+- `onboarding-steps` each step renders: welcome, permissions, shortcut, model, tryIt.
 - `onboarding-download` the model step downloads into an empty model folder.
 
 ## How to get to it (user POV)

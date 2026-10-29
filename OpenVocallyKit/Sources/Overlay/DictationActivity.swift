@@ -2,14 +2,11 @@ import DictationCore
 import Foundation
 
 extension OverlayActivity {
-  /// Longer than every measured mic start (54 to 147 ms on AirPods, about 50 ms built in).
-  public static let connectingDelay: Duration = .milliseconds(300)
-
   /// nil when dictation shows nothing: idle, and a cancel, whose collapse and cue are the
   /// feedback.
   /// `now` and `hostNow` convert the manual paste deadline from the dictation clock.
   /// `wakingMicrophone` names a start that is still waiting for the mic after
-  /// `connectingDelay`; a faster start shows no label of its own, so it never flashes.
+  /// `NotchCore.connectingDelay`; a faster start shows no label of its own, so it never flashes.
   public init?(
     dictation phase: DictationPhase, wakingMicrophone: Bool = false, now: Date = .now,
     hostNow: HostTime = .now()

@@ -17,7 +17,6 @@ cd "$(dirname "$0")/.."
 pattern='(^|[^A-Za-z0-9_])with(Animation|Transaction)([^A-Za-z0-9_]|$)'
 planted='    withAnimation(animation) { model.scene = scene }'
 message='animate with .animation(_:value:) keyed on the footprint or content; see docs/design.md'
-removed_with_feature_notch_flag=(OpenVocallyKit/Sources/Overlay/OverlayHost.swift)
 
 if ! printf '%s\n' "$planted" | grep -qE "$pattern"; then
   echo "check-overlay-motion: the rule no longer catches: $planted" >&2
@@ -29,9 +28,6 @@ roots=("$@")
 
 status=0
 while IFS= read -r file; do
-  for allowed in "${removed_with_feature_notch_flag[@]}"; do
-    [[ "$file" == "$allowed" ]] && continue 2
-  done
   while IFS= read -r hit; do
     [[ -n "$hit" ]] || continue
     echo "$file:$hit: $message" >&2

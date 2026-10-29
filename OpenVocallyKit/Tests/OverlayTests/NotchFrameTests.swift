@@ -82,10 +82,9 @@ import Testing
   }
 
   @Test(arguments: reasons)
-  func `the notch shows the pill's copy for every failure`(reason: DictationFailureReason) {
+  func `the notch shows the failure's copy for every failure`(reason: DictationFailureReason) {
     let notch = OverlayActivity(lead: .notice(.failure(reason)))
-    let pill = OverlayActivity(dictation: .failed(reason))
-    #expect(notch == pill)
+    #expect(notch == OverlayActivity(dictation: .failed(reason)))
     #expect(notch?.accessibilityLabel == reason.overlayMessage?.description)
   }
 }

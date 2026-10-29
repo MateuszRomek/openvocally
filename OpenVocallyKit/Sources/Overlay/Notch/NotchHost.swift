@@ -154,7 +154,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   /// The display under the pointer, else the primary display, which always has a menu bar.
   private func pointerDisplay() -> CGDirectDisplayID? {
     let screens = Self.screens()
-    let found = OverlayHost.display(
+    let found = Displays.display(
       containing: pointer(), in: screens.map { (id: $0.id, frame: $0.screen.frame) })
     let target = found ?? screens.first?.id
     if target == nil { logger.notice("Overlay skipped: no display") }
@@ -182,7 +182,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
   private func followCursor() {
     let screens = Self.screens()
     guard
-      let to = OverlayHost.display(
+      let to = Displays.display(
         containing: pointer(), in: screens.map { (id: $0.id, frame: $0.screen.frame) }),
       to != core.pointerDisplay?.rawValue
     else { return }
@@ -200,11 +200,11 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
       else { return }
       let panel = notchPanel.panel
       let frames = Self.screens().map { (id: $0.id, frame: $0.screen.frame) }
-      let panelDisplay = OverlayHost.display(
+      let panelDisplay = Displays.display(
         containing: CGPoint(x: panel.frame.midX, y: panel.frame.midY), in: frames)
-      let cursorDisplay = OverlayHost.display(containing: self.pointer(), in: frames)
-      let focusDisplay = OverlayHost.focusedWindowCentre().flatMap {
-        OverlayHost.display(containing: $0, in: frames)
+      let cursorDisplay = Displays.display(containing: self.pointer(), in: frames)
+      let focusDisplay = Displays.focusedWindowCentre().flatMap {
+        Displays.display(containing: $0, in: frames)
       }
       logger.notice(
         """
@@ -299,7 +299,9 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay
 
   /// Draws a recording frame at alpha 0, then the hidden scene, which shows nothing. The panel
   /// then stays ordered in at alpha 1: there is no animation completion to hide it after, and
-  /// ordering out strands it off full-screen Spaces (see `ScreenPanel.hide()`).
+  /// ordering out strands it off full-screen Spaces: when a full-screen Space closes while a panel
+  /// is ordered out, the window server drops the panel from every other full-screen Space,
+  /// despite `canJoinAllSpaces`, until the app quits.
   func prewarm() {
     panel.alphaValue = 0
     panel.orderFrontRegardless()

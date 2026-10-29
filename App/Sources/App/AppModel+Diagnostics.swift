@@ -11,13 +11,6 @@ extension AppModel {
   /// AudioCapture: `AudioEndpoint` has no field for either.
   func diagnosticsSnapshot() -> DiagnosticsSnapshot {
     let bundle = Bundle.main
-    #if FEATURE_NOTCH
-      let overlayDescription = "notch"
-    #else
-      let overlay = OverlayPreference.stored()
-      let overlayDescription =
-        "\(overlay.style.rawValue), \(UserDefaults.standard.string(forKey: IslandEdge.defaultsKey) ?? "default edge")"
-    #endif
     let cues = SoundCueSettings.load(from: .standard)
     let settings = [
       DiagnosticsSetting("Speech model", models.active.rawValue),
@@ -37,7 +30,6 @@ extension AppModel {
           .joined(separator: ", ")),
       DiagnosticsSetting(
         "Microphone choice", input.chosenUID == nil ? "system default" : "chosen in Settings"),
-      DiagnosticsSetting("Overlay", overlayDescription),
       DiagnosticsSetting("Sound cues", cues.enabled ? "on, volume \(cues.volume)" : "off"),
       DiagnosticsSetting(
         "Onboarding finished", String(UserDefaults.standard.bool(forKey: Onboarding.completedKey))),

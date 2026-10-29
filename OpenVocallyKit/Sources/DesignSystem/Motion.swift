@@ -1,22 +1,7 @@
 import SwiftUI
 
-/// Named animations. The overlay values are the Spring variant from the overlay motion lab.
+/// Named animations.
 public enum Motion: String, CaseIterable, Sendable {
-  /// The overlay appears, including on a key press. The glyph shows at full opacity in the
-  /// first frame; only the shape animates.
-  case overlayExpand
-  /// The overlay already on screen grows to a bigger level. Slower and bouncier than the
-  /// appear, so the user sees one pill stretch into the alert.
-  case overlayGrow
-  /// The overlay shrinks to a smaller level. Critically damped, so the shape never dips
-  /// inside the notch.
-  case overlayCollapse
-  /// The overlay leaves. Shorter than any entrance: the user is done with it.
-  case overlayHide
-  /// Overlay content changes between phases. Pair it with `.transition(.blurReplace)`.
-  case overlayContentSwap
-  /// Meter bars follow the microphone level. Decoration: the bars freeze under Reduce Motion.
-  case overlayMeter
   /// The notch grows to a bigger footprint for anything but a key press: a result arriving, the
   /// pointer bringing it to another display.
   case grow
@@ -55,12 +40,6 @@ public enum Motion: String, CaseIterable, Sendable {
 
   public var animation: Animation {
     switch self {
-    case .overlayExpand: .spring(response: 0.42, dampingFraction: 0.8)
-    case .overlayGrow: .spring(response: 0.5, dampingFraction: 0.68)
-    case .overlayCollapse: .spring(response: 0.45, dampingFraction: 1)
-    case .overlayHide: .spring(response: 0.22, dampingFraction: 1)
-    case .overlayContentSwap: .smooth(duration: 0.3)
-    case .overlayMeter: .linear(duration: 0.05)
     case .grow: .spring(response: 0.3, dampingFraction: 0.9)
     case .shrink: .spring(response: 0.25, dampingFraction: 1)
     case .keyboard: .spring(response: 0.15, dampingFraction: 1)
@@ -82,8 +61,7 @@ public enum Motion: String, CaseIterable, Sendable {
   /// for decoration or for a key's feedback. Views that move or resize switch to an opacity transition with it.
   var reduced: Animation? {
     switch self {
-    case .overlayExpand, .overlayGrow, .overlayCollapse, .overlayHide, .overlayContentSwap, .grow,
-      .shrink, .content:
+    case .grow, .shrink, .content:
       .easeInOut(duration: 0.2)
     case .windowReveal, .windowUnfold: .easeOut(duration: 0.15)
     case .press: .easeOut(duration: 0.1)
@@ -91,7 +69,7 @@ public enum Motion: String, CaseIterable, Sendable {
     case .keyCap: .easeOut(duration: 0.1)
     case .onboardingIntro, .onboardingStep: .easeInOut(duration: 0.2)
     case .onboardingExit: .easeOut(duration: 0.15)
-    case .overlayMeter, .meter, .keyboard: nil
+    case .meter, .keyboard: nil
     }
   }
 
@@ -111,7 +89,7 @@ public enum Motion: String, CaseIterable, Sendable {
   /// How far an onboarding step travels as it enters or leaves.
   static let stepTravel: CGFloat = 20
   /// Entrances start this close to full size, never from nothing.
-  public static let appearScale: CGFloat = 0.9
+  static let appearScale: CGFloat = 0.9
 
   /// A badge that confirms a new state, such as the Active tag on the model just picked: it
   /// sharpens in from slightly small on `confirm` and leaves with a plain fade, faster than it

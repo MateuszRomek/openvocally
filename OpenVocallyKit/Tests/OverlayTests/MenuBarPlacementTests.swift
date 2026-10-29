@@ -49,7 +49,7 @@ struct MenuBarPlacementTests {
   }
 
   @Test func `a hardware notch ignores the menu bar height`() {
-    let placement = NotchPlacement(PlacementTests.notched, fallbackMenuBarHeight: 24)
+    let placement = NotchPlacement(NotchGeometryTests.notched, fallbackMenuBarHeight: 24)
     #expect(placement.hardware == true)
     #expect(placement.notch.size == CGSize(width: 185, height: 32))
     #expect(placement.notch.midX == 864)

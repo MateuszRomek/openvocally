@@ -21,7 +21,7 @@ The code is split into a Swift package and a thin app target.
 | `Transcription` | Installs and loads models, and runs the Parakeet, Whisper and Apple speech engines. |
 | `Paste` | Writes the transcript to the clipboard, posts Command-V, and restores the clipboard. |
 | `Dictation` | `DictationPipeline`, which connects the state machine to capture, transcription, paste and storage. |
-| `Overlay` | The recording indicator, shown as a notch or a floating island. |
+| `Overlay` | The recording indicator, drawn as the dictation notch. |
 | `SoundCues` | The start, cancel and error sounds. |
 | `Storage` | The SQLite database (GRDB) for transcripts, sessions and shortcuts, and the recording archive. |
 | `Reporting` | The statistics and charts data for Home. |

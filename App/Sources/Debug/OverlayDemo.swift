@@ -6,15 +6,8 @@
 
   private let logger = Logger(subsystem: "com.openvocally.app", category: "overlay-demo")
 
-  #if FEATURE_NOTCH
-    typealias DemoOverlay = NotchHost
-  #else
-    typealias DemoOverlay = OverlayHost
-  #endif
-
   /// Launch with `-overlayDemo YES` to drive the real overlay through a scripted loop instead of
-  /// the hotkeys, `-overlayStyle notch` or `island` to pick its style, and `-overlayPlacement
-  /// islandTop` or `islandBottom` to pick the island's edge. `-overlayDemoScenario paste` or
+  /// the hotkeys. `-overlayDemoScenario paste` or
   /// `manualPaste` loops one dictation instead of every state, and `pasteThenManualPaste`
   /// alternates the two.
   /// The pipeline never starts, so nothing is recorded or pasted.
@@ -31,7 +24,7 @@
       UserDefaults.standard.string(forKey: "overlayDemoScenario").flatMap(Scenario.init) ?? .all
     }
 
-    static func run(_ overlay: DemoOverlay) async {
+    static func run(_ overlay: NotchHost) async {
       let scenario = Self.scenario
       while !Task.isCancelled {
         switch scenario {
@@ -45,7 +38,7 @@
       }
     }
 
-    private static func loopPaste(_ overlay: DemoOverlay) async {
+    private static func loopPaste(_ overlay: NotchHost) async {
       await recordWithMeter(overlay)
       await step("transcribing", .transcribing, for: .milliseconds(700), overlay)
       await step("pasting", .pasting, for: .milliseconds(200), overlay)
@@ -53,7 +46,7 @@
       await step("hidden", .idle, for: .milliseconds(1500), overlay)
     }
 
-    private static func loopManualPaste(_ overlay: DemoOverlay) async {
+    private static func loopManualPaste(_ overlay: NotchHost) async {
       await recordWithMeter(overlay)
       await step("transcribing", .transcribing, for: .milliseconds(500), overlay)
       let window = DictationMachine.manualPasteWindow
@@ -62,14 +55,14 @@
       await step("hidden", .idle, for: .milliseconds(1500), overlay)
     }
 
-    private static func recordWithMeter(_ overlay: DemoOverlay) async {
+    private static func recordWithMeter(_ overlay: NotchHost) async {
       await step("starting", .starting(.pushToTalk), for: .milliseconds(150), overlay)
       show(.recording(.pushToTalk), on: overlay)
       logger.info("recording with meter")
       await feedMeter(overlay, for: .milliseconds(2500))
     }
 
-    private static func loopAll(_ overlay: DemoOverlay) async {
+    private static func loopAll(_ overlay: NotchHost) async {
       await recordWithMeter(overlay)
       await step("transcribing", .transcribing, for: .milliseconds(700), overlay)
       await step("pasting", .pasting, for: .milliseconds(200), overlay)
@@ -77,7 +70,7 @@
       await step("hidden", .idle, for: .seconds(1), overlay)
 
       logger.info("connecting bluetooth mic")
-      show(.starting(.pushToTalk), wakingMicrophone: true, on: overlay)
+      show(.starting(.pushToTalk), on: overlay)
       try? await Task.sleep(for: .milliseconds(1800))
       show(.recording(.pushToTalk), on: overlay)
       await feedMeter(overlay, for: .milliseconds(1500))
@@ -96,7 +89,7 @@
     }
 
     private static func step(
-      _ name: String, _ phase: DictationPhase, for duration: Duration, _ overlay: DemoOverlay
+      _ name: String, _ phase: DictationPhase, for duration: Duration, _ overlay: NotchHost
     ) async {
       logger.info("\(name, privacy: .public)")
       show(phase, on: overlay)
@@ -105,15 +98,11 @@
 
     /// A waking microphone needs no call of its own on the notch: its core shows Connecting
     /// once the start outlasts the delay.
-    static func show(_ phase: DictationPhase, wakingMicrophone: Bool = false, on overlay: DemoOverlay) {
-      #if FEATURE_NOTCH
-        overlay.show(phase)
-      #else
-        overlay.show(OverlayActivity(dictation: phase, wakingMicrophone: wakingMicrophone), from: .dictation)
-      #endif
+    static func show(_ phase: DictationPhase, on overlay: NotchHost) {
+      overlay.show(phase)
     }
 
-    private static func feedMeter(_ overlay: DemoOverlay, for duration: Duration) async {
+    private static func feedMeter(_ overlay: NotchHost, for duration: Duration) async {
       let start = ContinuousClock.now
       while ContinuousClock.now - start < duration, !Task.isCancelled {
         let t = (ContinuousClock.now - start) / .seconds(1)

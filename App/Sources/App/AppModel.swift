@@ -4,6 +4,7 @@ import DictationCore
 import Hotkeys
 import Models
 import Observation
+import Overlay
 import Paste
 import SoundCues
 import Storage
@@ -122,6 +123,7 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
     let paster = Paster()
     self.paster = paster
     let capture = input.capture
+    RetiredOverlayDefaults.remove(from: .standard)
     feedback.prepare()
     Task {
       for await levels in capture.levels {
@@ -165,7 +167,6 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
       if shortcuts.absorb(update) { continue }
       feedback.show(update)
     }
-    feedback.finish()
   }
 
   /// The Transcripts and Home Try Again when the database failed to open.
@@ -187,12 +188,6 @@ private let logger = Logger(subsystem: "com.openvocally.app", category: "app")
     shortcuts.promptsForAccessibility = false
     NSApplication.shared.activate()
     windowOpener?(id: Onboarding.windowID)
-  }
-
-  /// Onboarding's overlay step. Not while the Try it card listens for a hold.
-  func previewOverlay() {
-    guard shortcuts.trial == nil else { return }
-    feedback.previewOverlay()
   }
 
   /// A permission skipped in onboarding is left to the Home banner, so the hotkey loop doesn't

@@ -4,7 +4,7 @@ import SwiftUI
 struct BarsView: View {
   let mode: BarsMode
   /// The token the live bars follow the meter on.
-  var meter = Motion.overlayMeter
+  let meter: Motion
   @Environment(BarsModel.self) private var bars
   @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
   @Environment(\.reduceMotionOverride) private var reduceMotionOverride
@@ -70,5 +70,14 @@ enum Bars {
         return 0.1 + 0.6 * wave * wave
       }
     }
+  }
+}
+
+/// Read only by `BarsView`, so a meter tick re-evaluates nothing else.
+@MainActor @Observable final class BarsModel {
+  var bands: [Float]
+
+  init(bands: [Float] = []) {
+    self.bands = bands
   }
 }

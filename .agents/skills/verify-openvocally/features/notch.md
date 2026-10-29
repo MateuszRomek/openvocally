@@ -1,6 +1,6 @@
 # Notch
 
-In Debug builds with `FEATURE_NOTCH`, dictation draws through a black notch at the top edge of the display under the pointer. It grows a strip beside the notch for connecting, starting, recording with a live meter, stopping, transcribing, pasting and complete, and drops a larger notice below it for manual paste and every failure.
+Dictation draws through a black notch at the top edge of the display under the pointer. It grows a strip beside the notch for connecting, starting, recording with a live meter, stopping, transcribing, pasting and complete, and drops a larger notice below it for manual paste and every failure.
 
 ## Sub-features
 
@@ -11,7 +11,7 @@ In Debug builds with `FEATURE_NOTCH`, dictation draws through a black notch at t
 
 ## How to get to it (user POV)
 
-- Run a Debug build and dictate. The notch grows on the press, on the display under the pointer.
+- Dictate. The notch grows on the press, on the display under the pointer.
 
 ## Driving it with the scripts
 
@@ -26,7 +26,6 @@ Preconditions:
 
 ## Gotchas
 
-- The notch exists only in Debug builds, behind the compile-time flag `FEATURE_NOTCH`. Release builds draw the overlay instead.
 - A display without a hardware notch draws a plain black notch 185 points wide at menu-bar height on its top edge, and nothing while hidden, so the `hidden` row of a contact sheet has no capture.
 - A built-in display has a notch only while the lid is open. With the lid closed, only the gallery's simulated geometry shows the hardware case.
 - `starting` turns into `connecting` after 300 ms, so the probe captures it early, and it can still be mid-fade.
