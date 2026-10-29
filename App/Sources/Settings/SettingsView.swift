@@ -12,24 +12,6 @@ struct SettingsView: View {
   let model: AppModel
 
   var body: some View {
-    #if FEATURE_AGENTS
-      ScrollViewReader { proxy in
-        form.onChange(of: model.settingsAnchor, initial: true) { _, anchor in
-          guard let anchor else { return }
-          // One main-actor turn later, so a Settings that opens with the anchor already set has
-          // laid out its sections before the scroll. Cleared only after scrolling.
-          Task { @MainActor in
-            proxy.scrollTo(anchor, anchor: .top)
-            if model.settingsAnchor == anchor { model.settingsAnchor = nil }
-          }
-        }
-      }
-    #else
-      form
-    #endif
-  }
-
-  private var form: some View {
     Form {
       Section("Setup") {
         SetupRows(model: model)
@@ -42,9 +24,6 @@ struct SettingsView: View {
       Section("Sound feedback") { SoundFeedbackRows(play: model.previewSoundCue) }
       Section("Appearance") { AppearanceRows() }
       Section("History") { HistoryRows(history: model.history) }
-      #if FEATURE_AGENTS
-        AgentsSections(agents: model.agents)
-      #endif
       if model.updates.isAvailable {
         Section("Updates") { UpdatesRows(updates: model.updates) }
       }
@@ -60,10 +39,6 @@ struct SettingsView: View {
     }
     .formStyle(.grouped)
     .navigationTitle("Settings")
-    #if FEATURE_AGENTS
-      // Once per appearance, for every provider, so the login shell is read again only once.
-      .onAppear { model.agents.refresh(.settingsShown) }
-    #endif
   }
 }
 

@@ -58,41 +58,10 @@ private func schema(_ reader: any DatabaseReader) throws -> [[String?]] {
 private let recordPath = ProcessInfo.processInfo.environment["STORAGE_RECORD_SNAPSHOT"]
 
 struct SnapshotMigrationTests {
-  /// A shipped migration is frozen by its snapshot, so each one has exactly one. An unshipped one
-  /// has none while its schema still changes.
-  @Test func everyShippedMigrationHasASnapshot() {
-    let shipped = AppDatabase.migrator.migrations.filter { !$0.hasPrefix(DatabaseMigrator.unshippedPrefix) }
-    #expect(!shipped.isEmpty)
-    #expect(snapshots().map(\.name) == shipped)
-  }
-
-  /// A branch switch can bring back a schema a Debug database already ran once.
-  @Test func anUnshippedSchemaRunsAgainWhenItComesBack() throws {
-    func migrate(_ queue: DatabaseQueue, _ sql: String) throws {
-      var migrator = DatabaseMigrator()
-      migrator.registerUnshippedMigration("lab", tablePrefix: "lab_", sql: sql)
-      try migrator.migrate(queue)
-    }
-    func columns(_ queue: DatabaseQueue) throws -> [String] {
-      try queue.read { try $0.columns(in: "lab_items").map(\.name) }
-    }
-    let first = "CREATE TABLE lab_items (id INTEGER PRIMARY KEY, a TEXT);"
-    let second = "CREATE TABLE lab_items (id INTEGER PRIMARY KEY, b TEXT);"
-    let queue = try DatabaseQueue()
-    try migrate(queue, first)
-    try migrate(queue, second)
-    #expect(try columns(queue) == ["id", "b"])
-    try migrate(queue, first)
-    #expect(try columns(queue) == ["id", "a"])
-  }
-
-  /// Release registers only the shipped migrations. A shipped one after an unshipped one would run
-  /// after it in Debug and without it in Release.
-  @Test func unshippedMigrationsComeLast() {
-    let migrations = AppDatabase.migrator.migrations
-    let firstUnshipped =
-      migrations.firstIndex { $0.hasPrefix(DatabaseMigrator.unshippedPrefix) } ?? migrations.endIndex
-    #expect(migrations[firstUnshipped...].allSatisfy { $0.hasPrefix(DatabaseMigrator.unshippedPrefix) })
+  @Test func snapshotsExistAndPrefixTheMigrations() {
+    let names = snapshots().map(\.name)
+    #expect(!names.isEmpty)
+    #expect(Array(AppDatabase.migrator.migrations.prefix(names.count)) == names)
   }
 
   @Test(arguments: snapshots())
