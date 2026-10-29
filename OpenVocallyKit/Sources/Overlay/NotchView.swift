@@ -16,7 +16,6 @@ struct OverlayKey: Hashable {
       case .compact(.status): activity.status.text
       case .compact(.bars): "bars"
       case .alert(let alert): alert.message
-      case .card(let card): card.title
       }
   }
 }
@@ -33,7 +32,7 @@ enum LeadingMark: Hashable {
     switch activity.body {
     case .compact(.bars(let mode)): self = .mic(listening: mode == .live)
     case .compact(.status): self = .mic(listening: false)
-    case .alert, .card: return nil
+    case .alert: return nil
     }
   }
 }

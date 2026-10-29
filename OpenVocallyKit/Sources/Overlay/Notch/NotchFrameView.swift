@@ -94,8 +94,6 @@ struct NotchFrameContent: View {
         .padding(.horizontal, OverlayMetrics.notchDropInset)
         .frame(height: OverlayMetrics.notchNoticeDrop)
       }
-    case .card:
-      EmptyView()
     }
   }
 }

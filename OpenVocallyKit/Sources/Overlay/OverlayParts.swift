@@ -21,8 +21,6 @@ private struct GlyphView: View {
         symbol("checkmark").fontWeight(.bold).foregroundStyle(.token(.success))
       case .attention:
         symbol("exclamationmark.triangle.fill").foregroundStyle(.token(.attention))
-      case .agent:
-        symbol("sparkles").foregroundStyle(.secondary)
       }
     }
     .frame(width: OverlayMetrics.glyphSize, height: OverlayMetrics.glyphSize)
