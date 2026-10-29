@@ -27,11 +27,10 @@ The code is split into a Swift package and a thin app target.
 | `Reporting` | The statistics and charts data for Home. |
 | `Diagnostics` | The diagnostics file for bug reports, with logs that leave out user content. |
 | `DesignSystem` | Tokens and components shared by every screen. |
-| `Agents` | Finds the Claude Code and Codex CLIs, checks their version and sign-in, and checks for updates. It can run the update command for an install it can attribute (npm, Homebrew or Claude Code's own installer), one at a time per npm prefix or Homebrew, and re-checks the version after. `UpdateRecipe` picks the tool and argv for the install, with npm's `--prefix` so the update lands on the copy that was found; `AgentHealthService` runs it, re-checks health after it, and ends a run without an outcome when the provider's configuration changed meanwhile. It runs each CLI, npm and brew only through `Subprocess`, never through a shell, and an update starts only when the child can disclaim the app's permissions. The whole module is behind `FEATURE_AGENTS`: every source file is wrapped in the flag, `scripts/check-banned-apis.sh` holds that, and a Release build compiles it empty. |
 
 ### App target
 
-`App/Sources` has one folder per area. `App/` holds `AppModel`, the composition root that starts the modules in order and shuts them down in order. `Home`, `Transcripts`, `Models`, `Settings` and `Onboarding` hold the screens. Behind `FEATURE_AGENTS`, Settings shows a section per coding agent CLI (`Settings/AgentsSection.swift`), read from the `AgentHealthService` that `AppModel` owns. `Debug/` holds the Design Gallery and the harnesses that drive the app in tests, and builds only in Debug.
+`App/Sources` has one folder per area. `App/` holds `AppModel`, the composition root that starts the modules in order and shuts them down in order. `Home`, `Transcripts`, `Models`, `Settings` and `Onboarding` hold the screens. `Debug/` holds the Design Gallery and the harnesses that drive the app in tests, and builds only in Debug.
 
 ## One dictation, start to finish
 
@@ -89,7 +88,7 @@ The app downloads no hosted model until the user picks one. `ModelDownloader` fe
 
 All data lives under `~/Library/Application Support/<bundle ID>`. Debug and Release builds have different bundle IDs, so they never share data.
 
-- `openvocally.sqlite` is the database. Migrations are named, ordered and append-only. A shipped migration is never edited. A new one comes with a committed snapshot (`scripts/storage/record-snapshot.sh`) that the tests check. A feature behind a `FEATURE_<NAME>` flag registers its schema last with `registerUnshippedMigration`, in Debug only and with no snapshot. Editing that schema rebuilds the feature's tables in Debug databases. When the feature ships, the schema becomes the next `vN` with its snapshot.
+- `openvocally.sqlite` is the database. Migrations are named, ordered and append-only. A shipped migration is never edited. A new one comes with a committed snapshot (`scripts/storage/record-snapshot.sh`) that the tests check.
 - `recordings/` holds the audio of a dictation while it transcribes. The audio of a failed dictation stays in `recordings/failed` for 7 days.
 - `local-models/` holds the downloaded models.
 

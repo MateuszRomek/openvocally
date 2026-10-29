@@ -42,7 +42,7 @@ public final class AppDatabase: Sendable {
     try writer.close()
   }
 
-  package static func inMemory() throws -> AppDatabase {
+  static func inMemory() throws -> AppDatabase {
     try AppDatabase(DatabaseQueue())
   }
 
@@ -96,10 +96,6 @@ public final class AppDatabase: Sendable {
     migrator.registerMigration("v2") { db in
       try db.execute(sql: "DROP TABLE settings")
     }
-    // Shipped migrations go above. An unfinished feature's migration comes last, in Debug only.
-    #if FEATURE_AGENTS
-      migrator.registerUnshippedMigration("agents", tablePrefix: "agent_", sql: agentsSchema)
-    #endif
     return migrator
   }
 

@@ -35,4 +35,3 @@ Each feature file starts with an H1 title and one paragraph on the user-visible 
 - [Onboarding](./onboarding.md) covers each first-run step.
 - [Design Gallery](./design-gallery.md) covers the design tokens and components in light, dark and Increase Contrast.
 - [Idle health](./idle-health.md) covers CPU use while the app sits idle.
-- [Agents](./agents.md) covers the fake `claude` and `codex` CLIs and the Agents UI shots.

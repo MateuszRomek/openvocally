@@ -11,12 +11,7 @@ UserDefaults. Fails on a concurrency escape hatch (@preconcurrency, nonisolated(
 script that resets permissions or matches processes by name unless the line ends with
 "# allowed: <reason>". Fails on MenuBarExtra(isInserted:) bound to a projected value.
 Fails on composedMessage, and on OSLogStore or import OSLog outside
-OpenVocallyKit/Sources/Diagnostics/LogArchive.swift. Fails when a target other than FakeAgentCLI,
-AgentFakesTestSupport, AgentFakesTests and AgentsTests depends on AgentFakes in
-OpenVocallyKit/Package.swift. Fails when a file in OpenVocallyKit/Sources/Agents other than
-Subprocess.swift starts a process, or one other than LoginEnvironment.swift passes "-c".
-Fails when a file in OpenVocallyKit/Sources/Agents does not open with #if FEATURE_AGENTS, so a
-Release build compiles the module empty.
+OpenVocallyKit/Sources/Diagnostics/LogArchive.swift.
 EOF
   exit 0
 fi
@@ -69,75 +64,5 @@ fi
 if grep -rnE 'OSLogStore|^[[:space:]]*import[[:space:]]+OSLog\b' --include='*.swift' App/Sources OpenVocallyKit/Sources OpenVocallyKit/Tests \
   | grep -v '^OpenVocallyKit/Sources/Diagnostics/LogArchive\.swift:'; then
   echo "Read logs only through Diagnostics/LogArchive.swift, which redacts each entry as it reads it." >&2
-  exit 1
-fi
-
-# Splits the targets array at its top-level commas, so a dependency list that spans several lines,
-# or names AgentFakes as .target(name:) or .product(name:), still belongs to its target. A target's
-# first name: is its own.
-if ! python3 -I - OpenVocallyKit/Package.swift <<'PY'
-import re, sys
-text = re.sub(r"(?m)^\s*//.*$", "", open(sys.argv[1]).read())
-blocks, current, depth, quoted = [], "", 0, False
-for ch in text[re.search(r"(?m)^\s*targets:\s*\[", text).end():]:
-    if ch == '"':
-        quoted = not quoted
-    elif not quoted and ch in "([":
-        depth += 1
-    elif not quoted and ch in ")]":
-        if depth == 0:
-            break
-        depth -= 1
-    elif not quoted and ch == "," and depth == 0:
-        blocks.append(current)
-        current = ""
-        continue
-    current += ch
-blocks.append(current)
-allowed = {"AgentFakes", "FakeAgentCLI", "AgentFakesTestSupport", "AgentFakesTests", "AgentsTests"}
-found = False
-for block in blocks:
-    name = re.search(r'name:\s*"([^"]+)"', block)
-    if name and name.group(1) not in allowed and '"AgentFakes"' in block[name.end():]:
-        print(f"OpenVocallyKit/Package.swift: target {name.group(1)} depends on AgentFakes")
-        found = True
-sys.exit(1 if found else 0)
-PY
-then
-  echo "AgentFakes is a test double. Only FakeAgentCLI, AgentFakesTestSupport, AgentFakesTests and AgentsTests may depend on it in OpenVocallyKit/Package.swift." >&2
-  exit 1
-fi
-
-if grep -nE '\.library\(.*(AgentFakes|FakeAgentCLI)' OpenVocallyKit/Package.swift \
-  || grep -rnE 'AgentFakes|FakeAgentCLI' project.yml App/; then
-  echo "AgentFakes and FakeAgentCLI are test doubles. Remove them from library products in OpenVocallyKit/Package.swift, from project.yml and from App/. The app selects a fake only through a provider's binary path." >&2
-  exit 1
-fi
-
-agents=OpenVocallyKit/Sources/Agents
-if grep -rnE 'posix_spawn|Process\(|\bexecv|\bsystem\(|popen\(' --include='*.swift' "$agents" \
-  | grep -v "^$agents/Subprocess\.swift:"; then
-  echo "Only $agents/Subprocess.swift may start a process. Call Subprocess.run, which never uses a shell, gives the child its own process group and kills it on timeout." >&2
-  exit 1
-fi
-
-if grep -rn '"-c"' --include='*.swift' "$agents" | grep -v "^$agents/LoginEnvironment\.swift:"; then
-  echo "Only $agents/LoginEnvironment.swift may pass \"-c\" to a shell, with its constant command. Pass the executable and an argument array to Subprocess.run instead; launch arguments come from LaunchArguments.split()." >&2
-  exit 1
-fi
-
-# Comments and blank lines may surround it; the first code line opens the flag, the last closes
-# it, and no column-0 #else or #elseif gives Release a branch.
-unflagged=$(find "$agents" -name '*.swift' -exec awk '
-  function check() { if (file != "" && (first !~ /^#if FEATURE_AGENTS[[:space:]]*$/ || last !~ /^#endif[[:space:]]*$/ || branch)) print file }
-  FNR == 1 { check(); file = FILENAME; first = ""; last = ""; branch = 0 }
-  /^[[:space:]]*$/ || /^[[:space:]]*\/\// { next }
-  { if (first == "") first = $0; last = $0 }
-  /^#(else|elseif)/ { branch = 1 }
-  END { check() }
-' {} +)
-if [ -n "$unflagged" ]; then
-  printf '%s\n' "$unflagged" >&2
-  echo "Every file in $agents must start with #if FEATURE_AGENTS and end with #endif, with no top-level #else, so Release builds carry no Agents code. Wrap the whole file in the flag; only comments may come before it." >&2
   exit 1
 fi

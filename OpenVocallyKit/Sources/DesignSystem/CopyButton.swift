@@ -43,8 +43,6 @@ public struct CopyButton: View {
     }
     .buttonStyle(PressFeedbackStyle())
     .help(copied ? "Copied" : title)
-    // The icon-only style draws no title, and help text is not a name VoiceOver reads.
-    .accessibilityLabel(copied ? "Copied" : title)
     .onDisappear {
       hold?.cancel()
       hold = nil

@@ -7,10 +7,6 @@ let strict: [SwiftSetting] = [
   .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
 ]
 
-/// Agents is unfinished. Its code compiles only in Debug, so Release carries none of it. Remove
-/// the define, and the `#if FEATURE_AGENTS` around each Agents file, when Agents ships.
-let agentsSettings = strict + [.define("FEATURE_AGENTS", .when(configuration: .debug))]
-
 let package = Package(
   name: "OpenVocallyKit",
   platforms: [.macOS(.v15)],
@@ -28,8 +24,6 @@ let package = Package(
     .library(name: "Storage", targets: ["Storage"]),
     .library(name: "Reporting", targets: ["Reporting"]),
     .library(name: "Diagnostics", targets: ["Diagnostics"]),
-    .library(name: "AgentsCore", targets: ["AgentsCore"]),
-    .library(name: "Agents", targets: ["Agents"]),
   ],
   dependencies: [
     // NemoTextProcessing normalizes text for FluidAudio's TTS, which the app does not use.
@@ -78,10 +72,8 @@ let package = Package(
     .testTarget(name: "SoundCuesTests", dependencies: ["SoundCues", "DictationCore"], swiftSettings: strict),
     .target(
       name: "Storage",
-      dependencies: [
-        .product(name: "GRDB", package: "GRDB.swift"), "AgentsCore", "DictationCore", "Hotkeys", "Reporting",
-      ],
-      swiftSettings: agentsSettings
+      dependencies: [.product(name: "GRDB", package: "GRDB.swift"), "DictationCore", "Hotkeys", "Reporting"],
+      swiftSettings: strict
     ),
     .testTarget(
       name: "StorageTests",
@@ -90,13 +82,6 @@ let package = Package(
       ],
       resources: [.copy("Snapshots")],
       swiftSettings: strict),
-    .target(name: "AgentsCore", swiftSettings: agentsSettings),
-    .testTarget(name: "AgentsCoreTests", dependencies: ["AgentsCore"], swiftSettings: strict),
-    .target(name: "Agents", dependencies: ["AgentsCore", "Storage"], swiftSettings: agentsSettings),
-    .testTarget(
-      name: "AgentsTests",
-      dependencies: ["Agents", "AgentsCore", "Storage", "AgentFakes", "AgentFakesTestSupport"],
-      swiftSettings: agentsSettings),
     .target(name: "Reporting", swiftSettings: strict),
     .testTarget(name: "ReportingTests", dependencies: ["Reporting"], swiftSettings: strict),
     .target(name: "Diagnostics", swiftSettings: strict),
@@ -112,13 +97,5 @@ let package = Package(
       name: "TranscriptionTests",
       dependencies: ["Models", "ModelsTestSupport", "Transcription"],
       swiftSettings: strict),
-    .target(name: "AgentFakes", swiftSettings: strict),
-    .executableTarget(name: "FakeAgentCLI", dependencies: ["AgentFakes"], swiftSettings: strict),
-    // Depends on the executable so `swift test` builds it next to the test bundle.
-    .target(
-      name: "AgentFakesTestSupport", dependencies: ["AgentFakes", "FakeAgentCLI"],
-      path: "Tests/AgentFakesTestSupport", swiftSettings: strict),
-    .testTarget(
-      name: "AgentFakesTests", dependencies: ["AgentFakes", "AgentFakesTestSupport"], swiftSettings: strict),
   ]
 )
