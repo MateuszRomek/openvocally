@@ -6,6 +6,18 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>OpenVocally</title>
         <item>
+            <title>1.1</title>
+            <pubDate>Thu, 29 Oct 2026 16:13:11 +0100</pubDate>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[- New: the dictation overlay now lives in the notch at the top of the display, on every display. On a Mac or display without a notch, OpenVocally draws one at the top edge while you dictate.
+- Removed: the island overlay style, and its setting for showing it at the top or the bottom of the display.
+]]></description>
+            <enclosure url="https://github.com/MateuszRomek/openvocally/releases/download/v1.1/OpenVocally-1.1.zip" length="11480407" type="application/octet-stream" sparkle:edSignature="CxGlYHpKlgCz8Fobd9r2MSyPSi6mfF53OAQa2SYu+ywZj7egz1qsVgBpF1INCQB7pRTkD3UaiCKtJKQ/+0r9AA=="/>
+        </item>
+        <item>
             <title>1.0.5</title>
             <pubDate>Sun, 25 Oct 2026 19:27:00 +0100</pubDate>
             <sparkle:version>6</sparkle:version>
@@ -88,6 +100,6 @@ Requires a Mac with Apple Silicon and macOS 15 or newer.
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: dx1nYkprcP6zp8K7drBhdt3AVEOb2pboQYxOSnHFK/cDECTlVMtyMoT3Eui6V8jRA6g7+FYGesA7X4O8ReZrCg==
-length: 6519
+edSignature: 7UAaL4Z8acKHVIAcriKN3IBvvTvVGKnRWoYRg5swdjzUy0oc5nEZk+ucX7PEFTe5qw4Al70DwWZE01dZsRuaBg==
+length: 7580
 -->
