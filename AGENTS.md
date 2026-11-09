@@ -74,7 +74,7 @@ Transcripts, audio and clipboard contents are user content. Log them only with `
 
 ## Agent skills
 
-Skills live in `.agents/skills/`. `.claude/skills/` exposes them to Claude Code, and `skills-lock.json` records where each one came from.
+General-purpose skills are installed per user, not in this repo. The repo keeps only its verification skill, `verify-openvocally`, in `.agents/skills/`, and `.claude/skills/` exposes it to Claude Code.
 
 ### Issue tracker
 
